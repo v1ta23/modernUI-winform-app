@@ -538,14 +538,6 @@ namespace WinFormsLightBlueGlassDemo
                         var cardPath = CreateRoundRectPath(rect, 16);
                         using var cardBrush = new SolidBrush(Color.FromArgb(Math.Min(255, (int)(eased * 255)), CurrentTheme.Card));
                         g.FillPath(cardBrush, cardPath);
-                        
-                        // 顶部强调色条
-                        var topBarRect = new Rectangle(rect.X, rect.Y, rect.Width, 3);
-                        var topBarPath = CreateRoundRectPath(topBarRect, 2);
-                        using var accentBrush = new LinearGradientBrush(topBarRect,
-                            Color.FromArgb(Math.Min(255, alpha), cardData[i].Color),
-                            Color.FromArgb(Math.Min(150, alpha / 2), cardData[i].Color), 0f);
-                        g.FillPath(accentBrush, topBarPath);
 
                         // 边框（微弱发光）
                         using var borderPen = new Pen(Color.FromArgb(Math.Min(80, alpha / 3), 255, 255, 255), 1.2f);
@@ -553,31 +545,7 @@ namespace WinFormsLightBlueGlassDemo
                     }
                     else
                     {
-                        // 浅色凹陷效果 (Neumorphic Inset)
-                        var cardPath = CreateRoundRectPath(rect, 16);
-                        
-                        // 凹陷卡片内部拟真微渐变背景 (比主背景深一点过渡到亮一点)
-                        using var cardBrush = new LinearGradientBrush(rect,
-                            Color.FromArgb(215, 220, 230), // 左上暗部
-                            Color.FromArgb(250, 253, 255), // 右下亮部
-                            45f);
-                        g.FillPath(cardBrush, cardPath);
-
-                        // 顶部强调色条 (镶嵌在凹槽内的LED灯带感觉)
-                        var topBarRect = new Rectangle(rect.X, rect.Y, rect.Width, 3);
-                        var topBarPath = CreateRoundRectPath(topBarRect, 2);
-                        using var accentBrush = new LinearGradientBrush(topBarRect,
-                            Color.FromArgb(Math.Min(255, alpha), cardData[i].Color),
-                            Color.FromArgb(Math.Min(150, alpha / 2), cardData[i].Color), 0f);
-                        g.FillPath(accentBrush, topBarPath);
-
-                        // 凹陷内阴影和高光边框模拟
-                        using var borderBrush = new LinearGradientBrush(rect,
-                            Color.FromArgb(150, 165, 185), // 左上受阴缘
-                            Color.FromArgb(255, 255, 255), // 右下受光缘
-                            45f);
-                        using var borderPen = new Pen(borderBrush, 1.8f);
-                        g.DrawPath(borderPen, cardPath);
+                        DrawSunken3DPanel(g, rect, 16, alpha);
                     }
 
                     if (alpha < 10) continue;
@@ -644,9 +612,9 @@ namespace WinFormsLightBlueGlassDemo
 
                 // ===== 左侧：活动日志面板 =====
                 var leftRect = new Rectangle(10, 10, leftW, panelH);
-                var leftPath = CreateRoundRectPath(leftRect, 16);
                 if (_isDarkTheme)
                 {
+                    var leftPath = CreateRoundRectPath(leftRect, 16);
                     DrawDarkSurfaceShadow(g, leftRect, 16);
                     using var bgBrush = new SolidBrush(Color.FromArgb(Math.Min(255, (int)(eased * 255)), CurrentTheme.Card));
                     g.FillPath(bgBrush, leftPath);
@@ -655,17 +623,7 @@ namespace WinFormsLightBlueGlassDemo
                 }
                 else
                 {
-                    using var bgBrush = new LinearGradientBrush(leftRect,
-                        Color.FromArgb(215, 220, 230),
-                        Color.FromArgb(250, 253, 255),
-                        45f);
-                    g.FillPath(bgBrush, leftPath);
-                    using var borderBrush = new LinearGradientBrush(leftRect,
-                        Color.FromArgb(150, 165, 185),
-                        Color.FromArgb(255, 255, 255),
-                        45f);
-                    using var borderPen = new Pen(borderBrush, 1.8f);
-                    g.DrawPath(borderPen, leftPath);
+                    DrawSunken3DPanel(g, leftRect, 16, alpha);
                 }
 
                 if (alpha > 10)
@@ -738,9 +696,9 @@ namespace WinFormsLightBlueGlassDemo
 
                 // ===== 右侧：快捷操作面板 =====
                 var rightRect = new Rectangle(10 + leftW + 15, 10, rightW, panelH);
-                var rightPath = CreateRoundRectPath(rightRect, 16);
                 if (_isDarkTheme)
                 {
+                    var rightPath = CreateRoundRectPath(rightRect, 16);
                     DrawDarkSurfaceShadow(g, rightRect, 16);
                     using var bgBrush = new SolidBrush(Color.FromArgb(Math.Min(255, (int)(eased * 255)), CurrentTheme.Card));
                     g.FillPath(bgBrush, rightPath);
@@ -749,17 +707,7 @@ namespace WinFormsLightBlueGlassDemo
                 }
                 else
                 {
-                    using var bgBrush = new LinearGradientBrush(rightRect,
-                        Color.FromArgb(215, 220, 230),
-                        Color.FromArgb(250, 253, 255),
-                        45f);
-                    g.FillPath(bgBrush, rightPath);
-                    using var borderBrush = new LinearGradientBrush(rightRect,
-                        Color.FromArgb(150, 165, 185),
-                        Color.FromArgb(255, 255, 255),
-                        45f);
-                    using var borderPen = new Pen(borderBrush, 1.8f);
-                    g.DrawPath(borderPen, rightPath);
+                    DrawSunken3DPanel(g, rightRect, 16, alpha);
                 }
 
                 if (alpha > 10)
@@ -904,6 +852,62 @@ namespace WinFormsLightBlueGlassDemo
             using var shadowPath = CreateRoundRectPath(shadowRect, radius + 2);
             using var shadowBrush = new SolidBrush(Color.FromArgb(90, 0, 0, 0));
             g.FillPath(shadowBrush, shadowPath);
+        }
+
+        private static void DrawSunken3DPanel(Graphics g, Rectangle rect, int radius, int parentAlpha)
+        {
+            float maxA = parentAlpha / 255f;
+            var cardPath = CreateRoundRectPath(rect, radius);
+
+            using var baseBrush = new SolidBrush(Color.FromArgb(parentAlpha, 222, 228, 236));
+            g.FillPath(baseBrush, cardPath);
+
+            g.SetClip(cardPath);
+
+            // Top-Left Soft Inner Shadow
+            for (int i = 1; i <= 8; i++)
+            {
+                var shadowRect = rect;
+                shadowRect.Width += 40;
+                shadowRect.Height += 40;
+                shadowRect.Offset(-i, -i); 
+                using var innerPath = CreateRoundRectPath(shadowRect, radius);
+                
+                int alpha = (int)(Math.Max(0, 50 - i * 6) * maxA);
+                if (alpha > 0)
+                {
+                    using var innerPen = new Pen(Color.FromArgb(alpha, 50, 70, 100), i);
+                    g.DrawPath(innerPen, innerPath);
+                }
+            }
+
+            // Bottom-Right Soft Inner Highlight
+            for (int i = 1; i <= 6; i++)
+            {
+                var hlRect = rect;
+                hlRect.X -= 40;
+                hlRect.Y -= 40;
+                hlRect.Width += 40;
+                hlRect.Height += 40;
+                hlRect.Offset(i, i); 
+                using var innerPath = CreateRoundRectPath(hlRect, radius);
+                
+                int alpha = (int)(Math.Max(0, 100 - i * 15) * maxA);
+                if (alpha > 0)
+                {
+                    using var innerPen = new Pen(Color.FromArgb(alpha, 255, 255, 255), i);
+                    g.DrawPath(innerPen, innerPath);
+                }
+            }
+            g.ResetClip();
+
+            // Outer Lip (Simulates edge catching light/shadow)
+            using var rimBrush = new LinearGradientBrush(rect,
+                Color.FromArgb((int)(255 * maxA), 255, 255, 255),
+                Color.FromArgb((int)(255 * maxA), 160, 175, 195),
+                45f);
+            using var rimPen = new Pen(rimBrush, 1.2f);
+            g.DrawPath(rimPen, cardPath);
         }
 
         private static void InvalidateControlTree(Control root)
