@@ -1,0 +1,12 @@
+# Build outputs
+bin/
+obj/
+
+# IDE
+.idea/
+*.user
+*.sln.cache
+*.suo
+
+# User-specific
+*.csproj.user
