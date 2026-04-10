@@ -1,10 +1,13 @@
 using App.Core.Interfaces;
 using App.Core.Models;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace App.Infrastructure.Repositories;
 
 public sealed class FileRememberMeRepository : IRememberMeRepository
 {
+    private const string Header = "DPAPI";
     private readonly string _filePath;
 
     public FileRememberMeRepository(string filePath)
@@ -25,7 +28,14 @@ public sealed class FileRememberMeRepository : IRememberMeRepository
             return null;
         }
 
-        return new RememberedCredential(lines[0], lines[1]);
+        if (lines[0] == Header && lines.Length >= 2)
+        {
+            return LoadEncrypted(lines[1]);
+        }
+
+        var legacyCredential = new RememberedCredential(lines[0], lines[1]);
+        Save(legacyCredential);
+        return legacyCredential;
     }
 
     public void Save(RememberedCredential credential)
@@ -36,7 +46,15 @@ public sealed class FileRememberMeRepository : IRememberMeRepository
             Directory.CreateDirectory(directory);
         }
 
-        File.WriteAllLines(_filePath, new[] { credential.Account, credential.Password });
+        if (!OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Remember me encryption requires Windows.");
+        }
+
+        var payload = $"{credential.Account}\n{credential.Password}";
+        var payloadBytes = Encoding.UTF8.GetBytes(payload);
+        var encryptedBytes = ProtectedData.Protect(payloadBytes, null, DataProtectionScope.CurrentUser);
+        File.WriteAllLines(_filePath, new[] { Header, Convert.ToBase64String(encryptedBytes) });
     }
 
     public void Clear()
@@ -44,6 +62,36 @@ public sealed class FileRememberMeRepository : IRememberMeRepository
         if (File.Exists(_filePath))
         {
             File.Delete(_filePath);
+        }
+    }
+
+    private static RememberedCredential? LoadEncrypted(string encryptedPayload)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        try
+        {
+            var encryptedBytes = Convert.FromBase64String(encryptedPayload);
+            var payloadBytes = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
+            var payload = Encoding.UTF8.GetString(payloadBytes);
+            var parts = payload.Split('\n', 2);
+            if (parts.Length < 2)
+            {
+                return null;
+            }
+
+            return new RememberedCredential(parts[0], parts[1]);
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+        catch (FormatException)
+        {
+            return null;
         }
     }
 }

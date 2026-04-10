@@ -13,4 +13,9 @@ obj/
 *.csproj.user
 
 # Local verification artifacts
-artifacts/
+artifacts/**
+!artifacts/verification/
+artifacts/verification/**
+!artifacts/verification/UiSmokeVerifier/
+!artifacts/verification/UiSmokeVerifier/Program.cs
+!artifacts/verification/UiSmokeVerifier/UiSmokeVerifier.csproj

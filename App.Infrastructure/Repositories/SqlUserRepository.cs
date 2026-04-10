@@ -11,6 +11,7 @@ public sealed class SqlUserRepository : IUserRepository
     public SqlUserRepository(SqlServerOptions options)
     {
         _connectionString = options.ConnectionString;
+        SqlServerSchemaInitializer.EnsureInitialized(_connectionString);
     }
 
     public bool ValidateCredentials(string account, string password)
@@ -19,16 +20,32 @@ public sealed class SqlUserRepository : IUserRepository
         connection.Open();
 
         const string sql = """
-                           SELECT COUNT(1)
+                           SELECT password
                            FROM Users
-                           WHERE account = @account AND password = @password
+                           WHERE account = @account
                            """;
 
         using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@account", account);
-        command.Parameters.AddWithValue("@password", password);
 
-        return Convert.ToInt32(command.ExecuteScalar()) > 0;
+        var storedPassword = command.ExecuteScalar() as string;
+        if (string.IsNullOrWhiteSpace(storedPassword))
+        {
+            return false;
+        }
+
+        if (PasswordHasher.IsHash(storedPassword))
+        {
+            return PasswordHasher.Verify(password, storedPassword);
+        }
+
+        if (!string.Equals(storedPassword, password, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        UpgradePasswordHash(connection, account, password);
+        return true;
     }
 
     public bool AccountExists(string account)
@@ -60,7 +77,21 @@ public sealed class SqlUserRepository : IUserRepository
 
         using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@account", account);
-        command.Parameters.AddWithValue("@password", password);
+        command.Parameters.AddWithValue("@password", PasswordHasher.Hash(password));
+        command.ExecuteNonQuery();
+    }
+
+    private static void UpgradePasswordHash(SqlConnection connection, string account, string password)
+    {
+        const string sql = """
+                           UPDATE Users
+                           SET password = @password
+                           WHERE account = @account
+                           """;
+
+        using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@account", account);
+        command.Parameters.AddWithValue("@password", PasswordHasher.Hash(password));
         command.ExecuteNonQuery();
     }
 }

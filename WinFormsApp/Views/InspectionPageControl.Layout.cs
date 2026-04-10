@@ -9,7 +9,7 @@ internal sealed partial class InspectionPageControl
         var root = new WorkspacePanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(20),
+            Padding = PageChrome.PagePadding,
             BackColor = PageBackground
         };
 
@@ -32,7 +32,7 @@ internal sealed partial class InspectionPageControl
         _headerCard = panel;
         panel.Dock = DockStyle.Top;
         panel.Height = 112;
-        panel.Padding = new Padding(26, 20, 26, 20);
+        panel.Padding = new Padding(20, 16, 20, 16);
 
         _headerTitlePanel = new Panel
         {
@@ -44,7 +44,7 @@ internal sealed partial class InspectionPageControl
         _headerTitleLabel = new Label
         {
             AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 18F, FontStyle.Bold),
+            Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold),
             ForeColor = Color.FromArgb(31, 41, 55),
             Margin = new Padding(0, 0, 0, 4),
             Text = "\u70b9\u68c0\u8bb0\u5f55\u4e2d\u5fc3",
@@ -54,7 +54,7 @@ internal sealed partial class InspectionPageControl
         _headerSubtitleLabel = new Label
         {
             AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 9.5F),
+            Font = new Font("Microsoft YaHei UI", 9F),
             ForeColor = Color.FromArgb(99, 114, 130),
             Margin = Padding.Empty,
             Text = $"\u5f53\u524d\u8d26\u53f7\uff1a{_account}  |  \u5f55\u5165\u3001\u7b5b\u9009\u3001\u76d1\u63a7\u3001\u5bfc\u51fa",

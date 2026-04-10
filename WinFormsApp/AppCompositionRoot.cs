@@ -31,8 +31,15 @@ internal sealed class AppCompositionRoot
             AppDomain.CurrentDomain.BaseDirectory,
             "data",
             "inspection-templates.json");
-        var inspectionRecordRepository = new JsonInspectionRecordRepository(inspectionRecordPath);
-        var inspectionTemplateRepository = new JsonInspectionTemplateRepository(inspectionTemplatePath);
+        var inspectionRecordRepository = new SqlInspectionRecordRepository(sqlOptions);
+        var inspectionTemplateRepository = new SqlInspectionTemplateRepository(sqlOptions);
+
+        MigrateJsonRecordsIfNeeded(
+            inspectionRecordRepository,
+            new JsonInspectionRecordRepository(inspectionRecordPath));
+        MigrateJsonTemplatesIfNeeded(
+            inspectionTemplateRepository,
+            new JsonInspectionTemplateRepository(inspectionTemplatePath));
 
         _authenticationService = new AuthenticationService(userRepository, rememberMeRepository);
         _inspectionRecordService = new InspectionRecordService(
@@ -60,5 +67,41 @@ internal sealed class AppCompositionRoot
             dashboardController,
             inspectionController,
             account);
+    }
+
+    private static void MigrateJsonRecordsIfNeeded(
+        IInspectionRecordRepository targetRepository,
+        IInspectionRecordRepository sourceRepository)
+    {
+        if (targetRepository.GetAll().Count > 0)
+        {
+            return;
+        }
+
+        var legacyRecords = sourceRepository.GetAll();
+        if (legacyRecords.Count == 0)
+        {
+            return;
+        }
+
+        targetRepository.SaveAll(legacyRecords);
+    }
+
+    private static void MigrateJsonTemplatesIfNeeded(
+        IInspectionTemplateRepository targetRepository,
+        IInspectionTemplateRepository sourceRepository)
+    {
+        if (targetRepository.GetAll().Count > 0)
+        {
+            return;
+        }
+
+        var legacyTemplates = sourceRepository.GetAll();
+        if (legacyTemplates.Count == 0)
+        {
+            return;
+        }
+
+        targetRepository.SaveAll(legacyTemplates);
     }
 }

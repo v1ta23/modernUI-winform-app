@@ -8,14 +8,14 @@ namespace WinFormsApp.Views;
 
 internal sealed partial class InspectionPageControl : UserControl
 {
-    private static Color PageBackground = Color.FromArgb(16, 19, 27);
-    private static Color SurfaceBackground = Color.FromArgb(28, 30, 40);
-    private static Color SurfaceBorder = Color.FromArgb(80, 85, 110);
-    private static Color InputBackground = Color.FromArgb(18, 22, 30);
-    private static Color TextPrimaryColor = Color.FromArgb(255, 255, 255);
-    private static Color TextSecondaryColor = Color.FromArgb(210, 215, 230);
-    private static Color TextMutedColor = Color.FromArgb(160, 170, 190);
-    private static Color AccentBlue = Color.FromArgb(88, 130, 255);
+    private static Color PageBackground = PageChrome.PageBackground;
+    private static Color SurfaceBackground = PageChrome.SurfaceBackground;
+    private static Color SurfaceBorder = PageChrome.SurfaceBorder;
+    private static Color InputBackground = PageChrome.InputBackground;
+    private static Color TextPrimaryColor = PageChrome.TextPrimary;
+    private static Color TextSecondaryColor = PageChrome.TextSecondary;
+    private static Color TextMutedColor = PageChrome.TextMuted;
+    private static Color AccentBlue = PageChrome.AccentBlue;
 
     private readonly InspectionController _controller;
     private readonly string _account;
@@ -1811,13 +1811,13 @@ internal sealed partial class InspectionPageControl : UserControl
 
     public void ApplyTheme()
     {
-        PageBackground = Color.FromArgb(16, 19, 27);
-        SurfaceBackground = Color.FromArgb(28, 30, 40);
-        SurfaceBorder = Color.FromArgb(80, 85, 110);
-        InputBackground = Color.FromArgb(18, 22, 30);
-        TextPrimaryColor = Color.FromArgb(255, 255, 255);
-        TextSecondaryColor = Color.FromArgb(210, 215, 230);
-        TextMutedColor = Color.FromArgb(160, 170, 190);
+        PageBackground = PageChrome.PageBackground;
+        SurfaceBackground = PageChrome.SurfaceBackground;
+        SurfaceBorder = PageChrome.SurfaceBorder;
+        InputBackground = PageChrome.InputBackground;
+        TextPrimaryColor = PageChrome.TextPrimary;
+        TextSecondaryColor = PageChrome.TextSecondary;
+        TextMutedColor = PageChrome.TextMuted;
 
         BackColor = PageBackground;
         if (_layoutRoot != null)
@@ -2033,37 +2033,17 @@ internal sealed partial class InspectionPageControl : UserControl
 
     private static Button CreatePrimaryButton(string text)
     {
-        var button = new Button
-        {
-            AutoSize = true,
-            BackColor = AccentBlue,
-            FlatStyle = FlatStyle.Flat,
-            ForeColor = TextPrimaryColor,
-            Font = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold),
-            Margin = new Padding(0, 0, 8, 0),
-            Padding = new Padding(14, 6, 14, 6),
-            Text = text,
-            UseVisualStyleBackColor = false
-        };
-        button.FlatAppearance.BorderSize = 0;
+        var button = PageChrome.CreateActionButton(text, AccentBlue, true);
+        button.Font = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold);
+        button.Margin = new Padding(0, 0, 8, 0);
         return button;
     }
 
     private static Button CreateSecondaryButton(string text)
     {
-        var button = new Button
-        {
-            AutoSize = true,
-            BackColor = InputBackground,
-            FlatStyle = FlatStyle.Flat,
-            ForeColor = TextSecondaryColor,
-            Font = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold),
-            Margin = new Padding(0, 0, 8, 0),
-            Padding = new Padding(14, 6, 14, 6),
-            Text = text,
-            UseVisualStyleBackColor = false
-        };
-        button.FlatAppearance.BorderColor = SurfaceBorder;
+        var button = PageChrome.CreateActionButton(text, AccentBlue, false);
+        button.Font = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold);
+        button.Margin = new Padding(0, 0, 8, 0);
         return button;
     }
 

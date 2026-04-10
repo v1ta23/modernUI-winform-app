@@ -8,38 +8,41 @@ namespace WinFormsApp.Views;
 
 internal sealed class InspectionAnalyticsControl : UserControl
 {
-    private static readonly Color PageBackground = Color.FromArgb(10, 10, 15);
-    private static readonly Color SurfaceBackground = Color.FromArgb(28, 30, 40);
-    private static readonly Color SurfaceBorder = Color.FromArgb(80, 85, 110);
-    private static readonly Color HeaderBackground = Color.FromArgb(22, 24, 33);
-    private static readonly Color TextPrimaryColor = Color.FromArgb(255, 255, 255);
-    private static readonly Color TextSecondaryColor = Color.FromArgb(210, 215, 230);
-    private static readonly Color TextMutedColor = Color.FromArgb(160, 170, 190);
-    private static readonly Color AccentBlue = Color.FromArgb(88, 130, 255);
-    private static readonly Color SuccessColor = Color.FromArgb(39, 174, 96);
-    private static readonly Color WarningColor = Color.FromArgb(241, 196, 15);
-    private static readonly Color DangerColor = Color.FromArgb(231, 76, 60);
-    private static readonly Color PendingColor = Color.FromArgb(148, 90, 255);
+    private static readonly Color PageBackground = PageChrome.PageBackground;
+    private static readonly Color SurfaceBackground = PageChrome.SurfaceBackground;
+    private static readonly Color SurfaceBorder = PageChrome.SurfaceBorder;
+    private static readonly Color InputBackground = PageChrome.InputBackground;
+    private static readonly Color TextPrimaryColor = PageChrome.TextPrimary;
+    private static readonly Color TextMutedColor = PageChrome.TextMuted;
+    private static readonly Color AccentBlue = PageChrome.AccentBlue;
+    private static readonly Color SuccessColor = PageChrome.AccentGreen;
+    private static readonly Color WarningColor = PageChrome.AccentOrange;
+    private static readonly Color DangerColor = PageChrome.AccentRed;
+    private static readonly Color PendingColor = PageChrome.AccentPurple;
 
     private readonly InspectionController _inspectionController;
     private readonly Label _generatedAtLabel;
-    private readonly Label _totalValueLabel;
-    private readonly Label _totalNoteLabel;
-    private readonly Label _passRateValueLabel;
-    private readonly Label _passRateNoteLabel;
-    private readonly Label _pendingValueLabel;
-    private readonly Label _pendingNoteLabel;
-    private readonly Label _abnormalValueLabel;
-    private readonly Label _abnormalNoteLabel;
-    private readonly Label _trendSubtitleLabel;
-    private readonly Label _statusSubtitleLabel;
-    private readonly Label _lineSubtitleLabel;
-    private readonly Label _issueSubtitleLabel;
-    private readonly Button _refreshButton;
+    private readonly TableLayoutPanel _rootLayout;
+    private readonly Control _headerShell;
     private readonly BufferedPanel _trendChartPanel;
     private readonly BufferedPanel _statusChartPanel;
     private readonly DataGridView _lineSummaryGrid;
     private readonly DataGridView _issueGrid;
+    private readonly PageChrome.ReadOnlyTextBlock _summaryTextBlock;
+    private readonly Label _decisionValueLabel;
+    private readonly Label _decisionNoteLabel;
+    private Label _decisionSubtitleLabel = null!;
+    private Label _trendSubtitleLabel = null!;
+    private Label _statusSubtitleLabel = null!;
+    private Label _lineSubtitleLabel = null!;
+    private Label _issueSubtitleLabel = null!;
+    private Label _summarySubtitleLabel = null!;
+    private readonly Label _summaryRiskValueLabel;
+    private readonly Label _summaryRiskNoteLabel;
+    private readonly Label _summaryLineValueLabel;
+    private readonly Label _summaryLineNoteLabel;
+    private readonly Label _summaryActionValueLabel;
+    private readonly Label _summaryActionNoteLabel;
 
     private InspectionDashboardViewModel _currentDashboard = new();
     private IReadOnlyList<LineSummaryRow> _lineRows = Array.Empty<LineSummaryRow>();
@@ -48,52 +51,25 @@ internal sealed class InspectionAnalyticsControl : UserControl
     public InspectionAnalyticsControl(InspectionController inspectionController)
     {
         _inspectionController = inspectionController;
+
         Dock = DockStyle.Fill;
         BackColor = PageBackground;
         Font = new Font("Microsoft YaHei UI", 9F);
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = PageChrome.PagePadding;
 
-        var root = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 4
-        };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 132F));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-
-        _refreshButton = CreateRefreshButton();
-        _generatedAtLabel = CreateInfoLabel();
-        var header = BuildHeader();
-
-        var summaryArea = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 4,
-            RowCount = 1,
-            Margin = new Padding(0, 0, 0, 12)
-        };
-        summaryArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        for (var index = 0; index < 4; index++)
-        {
-            summaryArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-        }
-
-        summaryArea.Controls.Add(CreateMetricCard("总记录", AccentBlue, out _totalValueLabel, out _totalNoteLabel), 0, 0);
-        summaryArea.Controls.Add(CreateMetricCard("合格率", SuccessColor, out _passRateValueLabel, out _passRateNoteLabel), 1, 0);
-        summaryArea.Controls.Add(CreateMetricCard("待闭环", PendingColor, out _pendingValueLabel, out _pendingNoteLabel), 2, 0);
-        summaryArea.Controls.Add(CreateMetricCard("异常数", DangerColor, out _abnormalValueLabel, out _abnormalNoteLabel), 3, 0);
+        _generatedAtLabel = PageChrome.CreateInfoLabel();
+        _decisionValueLabel = PageChrome.CreateValueLabel(14F, "--");
+        _decisionValueLabel.Dock = DockStyle.Top;
+        _decisionValueLabel.Margin = Padding.Empty;
+        _decisionNoteLabel = PageChrome.CreateNoteLabel();
+        _decisionNoteLabel.Dock = DockStyle.Top;
+        _decisionNoteLabel.Margin = new Padding(0, 8, 0, 0);
 
         _trendChartPanel = new BufferedPanel
         {
             Dock = DockStyle.Fill,
             BackColor = SurfaceBackground,
-            Margin = new Padding(14, 0, 14, 14)
+            Margin = Padding.Empty
         };
         _trendChartPanel.Paint += DrawTrendChart;
 
@@ -101,45 +77,50 @@ internal sealed class InspectionAnalyticsControl : UserControl
         {
             Dock = DockStyle.Fill,
             BackColor = SurfaceBackground,
-            Margin = new Padding(14, 0, 14, 14)
+            Margin = Padding.Empty
         };
         _statusChartPanel.Paint += DrawStatusChart;
 
-        var chartArea = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = new Padding(0, 0, 0, 12)
-        };
-        chartArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56F));
-        chartArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44F));
-        chartArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        chartArea.Controls.Add(CreateSectionShell("趋势变化", "最近 8 个时间桶状态变化", out _trendSubtitleLabel, _trendChartPanel), 0, 0);
-        chartArea.Controls.Add(CreateSectionShell("状态占比", "按当前筛选结果汇总", out _statusSubtitleLabel, _statusChartPanel), 1, 0);
-
         _lineSummaryGrid = CreateLineSummaryGrid();
         _issueGrid = CreateIssueGrid();
-        var tableArea = new TableLayoutPanel
+        _summaryTextBlock = PageChrome.CreateReadOnlyTextBlock();
+        _summaryTextBlock.Font = new Font("Microsoft YaHei UI", 8.8F);
+
+        _summaryRiskValueLabel = PageChrome.CreateValueLabel(14F, "--");
+        _summaryRiskNoteLabel = PageChrome.CreateNoteLabel();
+        _summaryLineValueLabel = PageChrome.CreateValueLabel(14F, "--");
+        _summaryLineNoteLabel = PageChrome.CreateNoteLabel();
+        _summaryActionValueLabel = PageChrome.CreateValueLabel(14F, "--");
+        _summaryActionNoteLabel = PageChrome.CreateNoteLabel();
+
+        var refreshButton = PageChrome.CreateActionButton("刷新数据", AccentBlue, true);
+        refreshButton.Click += (_, _) => RefreshData();
+
+        _rootLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 1
+            ColumnCount = 1,
+            RowCount = 5
         };
-        tableArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56F));
-        tableArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44F));
-        tableArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        tableArea.Controls.Add(CreateSectionShell("产线汇总", "按产线统计巡检结果", out _lineSubtitleLabel, _lineSummaryGrid), 0, 0);
-        tableArea.Controls.Add(CreateSectionShell("最近关注项", "最近预警和异常记录", out _issueSubtitleLabel, _issueGrid), 1, 0);
+        _rootLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _rootLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96F));
+        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 37F));
+        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 27F));
+        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 36F));
 
-        root.Controls.Add(header, 0, 0);
-        root.Controls.Add(summaryArea, 0, 1);
-        root.Controls.Add(chartArea, 0, 2);
-        root.Controls.Add(tableArea, 0, 3);
-        Controls.Add(root);
+        _headerShell = BuildHeader(refreshButton);
+        PageChrome.BindControlHeightToRow(_rootLayout, 0, _headerShell);
 
+        _rootLayout.Controls.Add(_headerShell, 0, 0);
+        _rootLayout.Controls.Add(BuildDecisionBar(), 0, 1);
+        _rootLayout.Controls.Add(BuildPrimaryRow(), 0, 2);
+        _rootLayout.Controls.Add(BuildSecondaryRow(), 0, 3);
+        _rootLayout.Controls.Add(BuildSummaryRow(), 0, 4);
+
+        Controls.Add(_rootLayout);
+        VisibleChanged += (_, _) => QueueVisibleLayoutPass();
         ApplyTheme();
         RefreshData();
     }
@@ -149,10 +130,8 @@ internal sealed class InspectionAnalyticsControl : UserControl
         BackColor = PageBackground;
         _trendChartPanel.BackColor = SurfaceBackground;
         _statusChartPanel.BackColor = SurfaceBackground;
-        ApplyGridTheme(_lineSummaryGrid);
-        ApplyGridTheme(_issueGrid);
-        _refreshButton.BackColor = HeaderBackground;
-        _refreshButton.ForeColor = TextPrimaryColor;
+        PageChrome.ApplyGridTheme(_lineSummaryGrid);
+        PageChrome.ApplyGridTheme(_issueGrid);
         Invalidate(true);
     }
 
@@ -164,43 +143,47 @@ internal sealed class InspectionAnalyticsControl : UserControl
 
         var pendingRows = _currentDashboard.Records
             .Where(record => record.Status != InspectionStatus.Normal && !record.IsClosed)
+            .OrderByDescending(record => record.CheckedAtValue)
             .ToList();
-        var pendingWarningCount = pendingRows.Count(record => record.Status == InspectionStatus.Warning);
-        var pendingAbnormalCount = pendingRows.Count(record => record.Status == InspectionStatus.Abnormal);
         var affectedDeviceCount = _currentDashboard.Records
             .Where(record => record.Status != InspectionStatus.Normal)
             .Select(record => $"{record.LineName}|{record.DeviceName}")
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
-        var highRiskLine = _lineRows.FirstOrDefault(row => row.AbnormalCount > 0);
-
-        _totalValueLabel.Text = _currentDashboard.TotalCount.ToString();
-        _totalNoteLabel.Text = $"正常 {_currentDashboard.NormalCount} / 预警 {_currentDashboard.WarningCount} / 异常 {_currentDashboard.AbnormalCount}";
-
-        _passRateValueLabel.Text = _currentDashboard.PassRateText;
-        _passRateNoteLabel.Text = _lineRows.Count == 0
-            ? "当前没有可统计的产线"
-            : $"覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备";
-
-        _pendingValueLabel.Text = pendingRows.Count.ToString();
-        _pendingNoteLabel.Text = pendingRows.Count == 0
-            ? "当前没有待闭环问题"
-            : $"预警 {pendingWarningCount} 条，异常 {pendingAbnormalCount} 条";
-
-        _abnormalValueLabel.Text = _currentDashboard.AbnormalCount.ToString();
-        _abnormalNoteLabel.Text = _currentDashboard.AbnormalCount == 0
-            ? "暂无异常记录"
-            : $"高风险产线：{highRiskLine?.LineName ?? "未分类"}";
+        var highRiskLine = _lineRows.FirstOrDefault(row => row.AbnormalCount > 0)
+            ?? _lineRows.FirstOrDefault(row => row.WarningCount > 0);
 
         _generatedAtLabel.Text = $"更新时间：{_currentDashboard.GeneratedAt:yyyy-MM-dd HH:mm}";
         _trendSubtitleLabel.Text = BuildTrendSubtitle(_currentDashboard.TrendPoints);
         _statusSubtitleLabel.Text = $"正常 {_currentDashboard.NormalCount} / 预警 {_currentDashboard.WarningCount} / 异常 {_currentDashboard.AbnormalCount}";
         _lineSubtitleLabel.Text = _lineRows.Count == 0
-            ? "当前没有产线统计结果"
-            : $"按风险优先级排序，共 {_lineRows.Count} 条产线";
+            ? "当前没有产线统计结果。"
+            : $"按风险优先级排序，共 {_lineRows.Count} 条产线。";
         _issueSubtitleLabel.Text = _attentionRows.Count == 0
-            ? "当前没有预警和异常记录"
-            : $"最近 {_attentionRows.Count} 条需关注记录";
+            ? "当前没有预警和异常记录。"
+            : $"最近 {_attentionRows.Count} 条需关注记录。";
+
+        _decisionSubtitleLabel.Text = BuildDecisionSubtitle(pendingRows.Count, highRiskLine);
+        _decisionValueLabel.Text = BuildDecisionTitle(pendingRows.Count, highRiskLine);
+        _decisionNoteLabel.Text = BuildDecisionNote(pendingRows.Count, affectedDeviceCount, highRiskLine);
+
+        _summarySubtitleLabel.Text = BuildSummarySubtitle(pendingRows.Count, highRiskLine);
+        _summaryTextBlock.Text = BuildSummaryText(pendingRows.Count, affectedDeviceCount, highRiskLine);
+
+        _summaryRiskValueLabel.Text = BuildRiskLevelText(pendingRows.Count, highRiskLine);
+        _summaryRiskNoteLabel.Text = pendingRows.Count == 0
+            ? "当前没有待闭环问题。"
+            : $"待闭环 {pendingRows.Count} 条，异常优先。";
+
+        _summaryLineValueLabel.Text = highRiskLine?.LineName ?? "暂无重点产线";
+        _summaryLineNoteLabel.Text = highRiskLine is null
+            ? "先看整体趋势和最近关注项。"
+            : $"异常 {highRiskLine.AbnormalCount} 条 / 预警 {highRiskLine.WarningCount} 条。";
+
+        _summaryActionValueLabel.Text = BuildActionTitle(pendingRows.Count, highRiskLine);
+        _summaryActionNoteLabel.Text = pendingRows.Count > 0
+            ? "建议先去报警中心或巡检页处理。"
+            : "当前更适合复盘趋势和产线稳定性。";
 
         _lineSummaryGrid.DataSource = _lineRows.ToList();
         _issueGrid.DataSource = _attentionRows.ToList();
@@ -209,23 +192,147 @@ internal sealed class InspectionAnalyticsControl : UserControl
         _statusChartPanel.Invalidate();
     }
 
-    private Control BuildHeader()
+    private void QueueVisibleLayoutPass()
     {
-        var shell = CreateSurfacePanel(new Padding(18, 10, 18, 10));
-        shell.Margin = new Padding(0, 0, 0, 12);
+        if (!Visible || !IsHandleCreated)
+        {
+            return;
+        }
 
+        BeginInvoke(new MethodInvoker(() =>
+        {
+            if (IsDisposed || !Visible)
+            {
+                return;
+            }
+
+            _headerShell.PerformLayout();
+            _rootLayout.PerformLayout();
+            PerformLayout();
+            Invalidate(true);
+            Update();
+        }));
+    }
+
+    private Control BuildHeader(Button refreshButton)
+    {
+        return PageChrome.CreatePageHeader(
+            "统计分析",
+            "把关键判断、趋势和关注项放稳，不再用花哨结构挤内容。",
+            _generatedAtLabel,
+            refreshButton);
+    }
+
+    private Control BuildDecisionBar()
+    {
+        var content = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent,
+            ColumnCount = 1,
+            RowCount = 2,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        content.Controls.Add(_decisionValueLabel, 0, 0);
+        content.Controls.Add(_decisionNoteLabel, 0, 1);
+
+        return PageChrome.CreateSectionShell(
+            "核心判断",
+            "系统先给一句结论，再决定你先看哪个区块。",
+            out _decisionSubtitleLabel,
+            content,
+            new Padding(0, 0, 0, 12));
+    }
+
+    private Control BuildPrimaryRow()
+    {
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
             ColumnCount = 2,
-            RowCount = 1
+            RowCount = 1,
+            Margin = new Padding(0, 0, 0, 12),
+            Padding = Padding.Empty
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42F));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        var titlePanel = new TableLayoutPanel
+        layout.Controls.Add(PageChrome.CreateSectionShell(
+            "趋势变化",
+            "最近 8 个时间桶的状态变化。",
+            out _trendSubtitleLabel,
+            _trendChartPanel,
+            new Padding(0, 0, 12, 0)), 0, 0);
+        layout.Controls.Add(PageChrome.CreateSectionShell(
+            "状态占比",
+            "按当前筛选结果汇总。",
+            out _statusSubtitleLabel,
+            _statusChartPanel,
+            Padding.Empty), 1, 0);
+        return layout;
+    }
+
+    private Control BuildSecondaryRow()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0, 0, 0, 12),
+            Padding = Padding.Empty
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+        layout.Controls.Add(PageChrome.CreateSectionShell(
+            "产线汇总",
+            "按风险优先级排，先看最需要处理的产线。",
+            out _lineSubtitleLabel,
+            _lineSummaryGrid,
+            new Padding(0, 0, 12, 0)), 0, 0);
+        layout.Controls.Add(PageChrome.CreateSectionShell(
+            "最近关注项",
+            "只放最近需要立刻看到的记录。",
+            out _issueSubtitleLabel,
+            _issueGrid,
+            Padding.Empty), 1, 0);
+        return layout;
+    }
+
+    private Control BuildSummaryRow()
+    {
+        var summaryBody = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        summaryBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70F));
+        summaryBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
+        summaryBody.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+        var textShell = PageChrome.CreateSurfacePanel(
+            new Padding(14),
+            14,
+            fillColor: InputBackground,
+            borderColor: Color.FromArgb(70, SurfaceBorder));
+        textShell.Margin = new Padding(0, 0, 12, 0);
+        _summaryTextBlock.Padding = new Padding(0);
+        textShell.Controls.Add(_summaryTextBlock);
+
+        var hintLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
@@ -234,238 +341,79 @@ internal sealed class InspectionAnalyticsControl : UserControl
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        titlePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        hintLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        hintLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.34F));
+        hintLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
+        hintLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
+        hintLayout.Controls.Add(CreateHintCard("风险级别", DangerColor, _summaryRiskValueLabel, _summaryRiskNoteLabel, new Padding(0, 0, 0, 8)), 0, 0);
+        hintLayout.Controls.Add(CreateHintCard("重点产线", WarningColor, _summaryLineValueLabel, _summaryLineNoteLabel, new Padding(0, 0, 0, 8)), 0, 1);
+        hintLayout.Controls.Add(CreateHintCard("下一步", AccentBlue, _summaryActionValueLabel, _summaryActionNoteLabel, Padding.Empty), 0, 2);
 
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Dock = DockStyle.Top,
-            Margin = new Padding(0, 0, 0, 2),
-            Text = "统计分析"
-        };
-        var subtitleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 9F),
-            ForeColor = TextSecondaryColor,
-            Dock = DockStyle.Top,
-            Margin = new Padding(0, 0, 0, 2),
-            Text = "基于巡检记录自动汇总关键指标、趋势和关注项"
-        };
-        _generatedAtLabel.Dock = DockStyle.Top;
-        _generatedAtLabel.Margin = Padding.Empty;
+        summaryBody.Controls.Add(textShell, 0, 0);
+        summaryBody.Controls.Add(hintLayout, 1, 0);
 
-        titlePanel.Controls.Add(titleLabel, 0, 0);
-        titlePanel.Controls.Add(subtitleLabel, 0, 1);
-        titlePanel.Controls.Add(_generatedAtLabel, 0, 2);
-
-        var actionPanel = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            BackColor = Color.Transparent,
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            Margin = new Padding(0)
-        };
-        actionPanel.Controls.Add(_refreshButton);
-
-        layout.Controls.Add(titlePanel, 0, 0);
-        layout.Controls.Add(actionPanel, 1, 0);
-        shell.Controls.Add(layout);
-        return shell;
+        return PageChrome.CreateSectionShell(
+            "AI 摘要",
+            "默认先给一句结论，再告诉你下一步看哪里。",
+            out _summarySubtitleLabel,
+            summaryBody,
+            Padding.Empty);
     }
 
-    private static BufferedPanel CreateMetricCard(string title, Color accentColor, out Label valueLabel, out Label noteLabel)
+    private static PageChrome.ChromePanel CreateHintCard(string title, Color accentColor, Label valueLabel, Label noteLabel, Padding margin)
     {
-        var card = CreateSurfacePanel(new Padding(16, 14, 16, 14));
-        card.Margin = new Padding(0, 0, 12, 0);
-        card.Paint += (_, e) =>
-        {
-            using var accentPen = new Pen(accentColor, 2F);
-            e.Graphics.DrawLine(accentPen, 16, 10, 54, 10);
-        };
+        var card = PageChrome.CreateSurfacePanel(
+            new Padding(14),
+            14,
+            fillColor: Color.FromArgb(18, accentColor),
+            borderColor: Color.FromArgb(76, accentColor));
+        card.Margin = margin;
 
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 2,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 6, 0, 0)
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Dock = DockStyle.Top,
-            Font = new Font("Microsoft YaHei UI", 9F),
-            ForeColor = TextMutedColor,
-            Margin = new Padding(0, 2, 0, 6),
-            Text = title
-        };
-        valueLabel = new Label
-        {
-            AutoSize = true,
-            Dock = DockStyle.Right,
-            Font = new Font("Segoe UI", 20F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Margin = new Padding(16, 0, 0, 0),
-            TextAlign = ContentAlignment.MiddleRight,
-            Text = "0"
-        };
-        noteLabel = new Label
-        {
-            AutoEllipsis = true,
-            AutoSize = false,
-            Dock = DockStyle.Fill,
-            Font = new Font("Microsoft YaHei UI", 8.5F),
-            ForeColor = TextSecondaryColor,
-            Margin = new Padding(0, 2, 0, 0),
-            TextAlign = ContentAlignment.TopLeft,
-            Text = string.Empty
-        };
-
-        layout.Controls.Add(titleLabel, 0, 0);
-        layout.Controls.Add(valueLabel, 1, 0);
-        layout.Controls.Add(noteLabel, 0, 1);
-        layout.SetColumnSpan(noteLabel, 2);
-        card.Controls.Add(layout);
-        return card;
-    }
-
-    private static BufferedPanel CreateSectionShell(string title, string subtitle, out Label subtitleLabel, Control body)
-    {
-        var shell = CreateSurfacePanel(new Padding(0));
-        shell.Margin = new Padding(0, 0, 12, 12);
+        valueLabel.Dock = DockStyle.Top;
+        valueLabel.Margin = Padding.Empty;
+        noteLabel.Dock = DockStyle.Top;
+        noteLabel.Margin = new Padding(0, 6, 0, 0);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
             ColumnCount = 1,
-            RowCount = 2
+            RowCount = 3,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        layout.Controls.Add(PageChrome.CreateNoteLabel(title, 8.8F, TextMutedColor), 0, 0);
+        layout.Controls.Add(valueLabel, 0, 1);
+        layout.Controls.Add(noteLabel, 0, 2);
 
-        var header = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            Padding = new Padding(18, 12, 18, 0)
-        };
-
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 10.5F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Location = new Point(0, 0),
-            Text = title
-        };
-        subtitleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 8.75F),
-            ForeColor = TextMutedColor,
-            Location = new Point(0, 22),
-            Text = subtitle
-        };
-
-        header.Controls.Add(titleLabel);
-        header.Controls.Add(subtitleLabel);
-        body.Dock = DockStyle.Fill;
-        body.Margin = new Padding(14, 0, 14, 14);
-
-        layout.Controls.Add(header, 0, 0);
-        layout.Controls.Add(body, 0, 1);
-        shell.Controls.Add(layout);
-        return shell;
-    }
-
-    private static BufferedPanel CreateSurfacePanel(Padding padding)
-    {
-        var panel = new BufferedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = SurfaceBackground,
-            Padding = padding
-        };
-        panel.Paint += (_, e) =>
-        {
-            using var borderPen = new Pen(SurfaceBorder, 1F);
-            var rect = new Rectangle(0, 0, panel.Width - 1, panel.Height - 1);
-            e.Graphics.DrawRectangle(borderPen, rect);
-        };
-        return panel;
-    }
-
-    private static Label CreateInfoLabel()
-    {
-        return new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 9F),
-            ForeColor = TextMutedColor,
-            Text = "更新时间：--"
-        };
-    }
-
-    private Button CreateRefreshButton()
-    {
-        var button = new Button
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            BackColor = HeaderBackground,
-            Cursor = Cursors.Hand,
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Padding = new Padding(14, 6, 14, 6),
-            Text = "刷新数据",
-            UseVisualStyleBackColor = false
-        };
-        button.FlatAppearance.BorderColor = AccentBlue;
-        button.FlatAppearance.BorderSize = 1;
-        button.FlatAppearance.MouseDownBackColor = Color.FromArgb(42, 46, 62);
-        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(34, 38, 50);
-        button.Click += (_, _) => RefreshData();
-        return button;
+        card.Controls.Add(layout);
+        return card;
     }
 
     private static DataGridView CreateLineSummaryGrid()
     {
         var grid = CreateGrid();
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(LineSummaryRow.LineName), HeaderText = "产线", Width = 120 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(LineSummaryRow.TotalCount), HeaderText = "总数", Width = 70 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(LineSummaryRow.NormalCount), HeaderText = "正常", Width = 70 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(LineSummaryRow.WarningCount), HeaderText = "预警", Width = 70 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(LineSummaryRow.AbnormalCount), HeaderText = "异常", Width = 70 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(LineSummaryRow.PassRateText), HeaderText = "合格率", Width = 90 });
+        grid.Columns.Add(CreateTextColumn(nameof(LineSummaryRow.LineName), "产线", 120F, 96));
+        grid.Columns.Add(CreateTextColumn(nameof(LineSummaryRow.TotalCount), "总数", 68F, 60));
+        grid.Columns.Add(CreateTextColumn(nameof(LineSummaryRow.NormalCount), "正常", 68F, 60));
+        grid.Columns.Add(CreateTextColumn(nameof(LineSummaryRow.WarningCount), "预警", 68F, 60));
+        grid.Columns.Add(CreateTextColumn(nameof(LineSummaryRow.AbnormalCount), "异常", 68F, 60));
+        grid.Columns.Add(CreateTextColumn(nameof(LineSummaryRow.PassRateText), "合格率", 78F, 70));
         return grid;
     }
 
     private static DataGridView CreateIssueGrid()
     {
         var grid = CreateGrid();
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(AttentionRow.CheckedAt), HeaderText = "时间", Width = 130 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(AttentionRow.TargetName), HeaderText = "设备", Width = 210 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(AttentionRow.StatusText), HeaderText = "状态", Width = 80 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = nameof(AttentionRow.Remark), HeaderText = "说明", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+        grid.Columns.Add(CreateTextColumn(nameof(AttentionRow.CheckedAt), "时间", 96F, 92));
+        grid.Columns.Add(CreateTextColumn(nameof(AttentionRow.TargetName), "设备", 150F, 120));
+        grid.Columns.Add(CreateTextColumn(nameof(AttentionRow.StatusText), "状态", 64F, 60));
+        grid.Columns.Add(CreateTextColumn(nameof(AttentionRow.Remark), "说明", 210F, 160));
         AttachStatusColoring(grid, nameof(AttentionRow.StatusText));
         return grid;
     }
@@ -478,35 +426,29 @@ internal sealed class InspectionAnalyticsControl : UserControl
             AllowUserToDeleteRows = false,
             AllowUserToResizeRows = false,
             AutoGenerateColumns = false,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             BackgroundColor = SurfaceBackground,
             BorderStyle = BorderStyle.None,
-            ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single,
-            Dock = DockStyle.Fill,
             EnableHeadersVisualStyles = false,
             MultiSelect = false,
             ReadOnly = true,
             RowHeadersVisible = false,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect
         };
-        grid.RowTemplate.Height = 32;
-        ApplyGridTheme(grid);
+        PageChrome.ApplyGridTheme(grid);
         return grid;
     }
 
-    private static void ApplyGridTheme(DataGridView grid)
+    private static DataGridViewTextBoxColumn CreateTextColumn(string propertyName, string title, float fillWeight, int minimumWidth)
     {
-        grid.BackgroundColor = SurfaceBackground;
-        grid.GridColor = SurfaceBorder;
-        grid.DefaultCellStyle.BackColor = SurfaceBackground;
-        grid.DefaultCellStyle.ForeColor = TextSecondaryColor;
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(45, 56, 78);
-        grid.DefaultCellStyle.SelectionForeColor = TextPrimaryColor;
-        grid.DefaultCellStyle.Font = new Font("Microsoft YaHei UI", 9F);
-        grid.ColumnHeadersDefaultCellStyle.BackColor = HeaderBackground;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimaryColor;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-        grid.ColumnHeadersHeight = 34;
+        return new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = propertyName,
+            HeaderText = title,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            FillWeight = fillWeight,
+            MinimumWidth = minimumWidth
+        };
     }
 
     private static void AttachStatusColoring(DataGridView grid, string statusPropertyName)
@@ -627,7 +569,6 @@ internal sealed class InspectionAnalyticsControl : UserControl
             return;
         }
 
-        var legendWidth = Math.Min(168, Math.Max(140, contentRect.Width / 3));
         var compactLegend = contentRect.Width < 360;
         var legendHeight = compactLegend ? counts.Length * 26 : 52;
         var diameter = Math.Min(contentRect.Height - legendHeight - 16, contentRect.Width - 24);
@@ -703,44 +644,6 @@ internal sealed class InspectionAnalyticsControl : UserControl
                 g.DrawString($"{value} / {value * 100F / total:0.0}%", legendValueFont, labelBrush, itemLeft + 16, itemTop + 20);
             }
         }
-
-        var useModernLegend = Environment.TickCount != int.MinValue;
-        if (useModernLegend)
-        {
-            return;
-        }
-
-        var legendX = donutRect.Right + 18;
-        var legendY = contentRect.Top + Math.Max(8, (contentRect.Height - 88) / 2);
-        using var titleFont = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
-        using var valueSmallFont = new Font("Microsoft YaHei UI", 9F);
-        foreach (var (name, value, color) in counts)
-        {
-            using var brush = new SolidBrush(color);
-            g.FillRectangle(brush, legendX, legendY + 6, 12, 12);
-            g.DrawString(name, titleFont, totalBrush, legendX + 20, legendY);
-            g.DrawString($"数量：{value}", valueSmallFont, labelBrush, legendX + 20, legendY + 22);
-            g.DrawString($"占比：{value * 100F / total:0.0}%", valueSmallFont, labelBrush, legendX + 20, legendY + 40);
-            legendY += 66;
-        }
-
-        var compactLegendRect = new Rectangle(
-            legendX - 6,
-            contentRect.Top + Math.Max(0, (contentRect.Height - 94) / 2),
-            Math.Min(legendWidth + 6, Math.Max(0, contentRect.Right - legendX + 6)),
-            94);
-        using var overlayBrush = new SolidBrush(SurfaceBackground);
-        g.FillRectangle(overlayBrush, compactLegendRect);
-
-        var compactLegendY = compactLegendRect.Top + 4;
-        foreach (var (name, value, color) in counts)
-        {
-            using var brush = new SolidBrush(color);
-            g.FillRectangle(brush, legendX, compactLegendY + 8, 12, 12);
-            g.DrawString(name, titleFont, totalBrush, legendX + 20, compactLegendY + 1);
-            g.DrawString($"{value}  /  {value * 100F / total:0.0}%", valueSmallFont, labelBrush, legendX + 76, compactLegendY + 3);
-            compactLegendY += 30;
-        }
     }
 
     private static void DrawTrendSeries(
@@ -805,10 +708,136 @@ internal sealed class InspectionAnalyticsControl : UserControl
     {
         if (points.Count == 0)
         {
-            return "当前没有趋势数据";
+            return "当前没有趋势数据。";
         }
 
-        return $"从 {points.First().Label} 到 {points.Last().Label} 的状态变化";
+        return $"从 {points.First().Label} 到 {points.Last().Label} 的状态变化。";
+    }
+
+    private string BuildDecisionSubtitle(int pendingCount, LineSummaryRow? highRiskLine)
+    {
+        if (_currentDashboard.AbnormalCount > 0)
+        {
+            return highRiskLine is null
+                ? "当前存在异常，建议先看最近关注项。"
+                : $"当前异常主要集中在 {highRiskLine.LineName}。";
+        }
+
+        if (pendingCount > 0)
+        {
+            return "当前没有异常压顶，但还有待闭环问题。";
+        }
+
+        if (_currentDashboard.WarningCount > 0)
+        {
+            return "当前以预警为主，建议做一次快速复核。";
+        }
+
+        return "当前整体平稳，可以把重点放在趋势复盘。";
+    }
+
+    private string BuildDecisionTitle(int pendingCount, LineSummaryRow? highRiskLine)
+    {
+        if (_currentDashboard.AbnormalCount > 0)
+        {
+            return $"结论：{highRiskLine?.LineName ?? "当前产线"} 风险偏高，异常需要优先处理。";
+        }
+
+        if (pendingCount > 0)
+        {
+            return "结论：当前有待闭环问题，先把未处理项收干净。";
+        }
+
+        if (_currentDashboard.WarningCount > 0)
+        {
+            return "结论：当前以预警为主，先复核重点设备。";
+        }
+
+        return "结论：当前巡检状态平稳，可以继续按节奏复盘。";
+    }
+
+    private string BuildDecisionNote(int pendingCount, int affectedDeviceCount, LineSummaryRow? highRiskLine)
+    {
+        if (_lineRows.Count == 0)
+        {
+            return "还没有可统计的数据，先补充巡检记录。";
+        }
+
+        if (pendingCount > 0)
+        {
+            return $"当前覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备。优先从 {highRiskLine?.LineName ?? "重点产线"} 开始。";
+        }
+
+        return $"当前覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备，先看趋势是否持续收敛。";
+    }
+
+    private string BuildSummarySubtitle(int pendingCount, LineSummaryRow? highRiskLine)
+    {
+        if (_currentDashboard.AbnormalCount > 0)
+        {
+            return highRiskLine is null
+                ? "系统判断当前风险偏高。"
+                : $"系统判断 {highRiskLine.LineName} 是当前最该先看的产线。";
+        }
+
+        if (pendingCount > 0)
+        {
+            return "系统判断当前先闭环，再回头看趋势。";
+        }
+
+        return "系统判断当前风险可控，适合做复盘。";
+    }
+
+    private string BuildSummaryText(int pendingCount, int affectedDeviceCount, LineSummaryRow? highRiskLine)
+    {
+        var overview = $"本次共 {_currentDashboard.TotalCount} 条记录，合格率 {_currentDashboard.PassRateText}。正常 {_currentDashboard.NormalCount} / 预警 {_currentDashboard.WarningCount} / 异常 {_currentDashboard.AbnormalCount}。";
+        var focus = _lineRows.Count == 0
+            ? "当前还没有产线统计结果，先补足巡检数据。"
+            : highRiskLine is null
+                ? $"当前覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备，暂时没有单一产线明显压过其他产线。"
+                : $"当前覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备，优先关注 {highRiskLine.LineName}。";
+        var action = pendingCount > 0
+            ? $"当前还有 {pendingCount} 条待闭环问题，建议先处理异常，再回头确认预警。"
+            : _attentionRows.Count > 0
+                ? "当前没有待闭环问题，但最近仍有需要复核的记录，先看最近关注项。"
+                : "当前没有待闭环问题，下一步更适合看趋势是否持续稳定。";
+
+        return string.Join(Environment.NewLine, [BuildDecisionTitle(pendingCount, highRiskLine), $"{overview} {focus}", action]);
+    }
+
+    private string BuildRiskLevelText(int pendingCount, LineSummaryRow? highRiskLine)
+    {
+        if (_currentDashboard.AbnormalCount > 0)
+        {
+            return highRiskLine is null ? "风险偏高" : $"{highRiskLine.LineName} 偏高";
+        }
+
+        if (pendingCount > 0)
+        {
+            return "需要关注";
+        }
+
+        if (_currentDashboard.WarningCount > 0)
+        {
+            return "轻度波动";
+        }
+
+        return "整体平稳";
+    }
+
+    private string BuildActionTitle(int pendingCount, LineSummaryRow? highRiskLine)
+    {
+        if (pendingCount > 0)
+        {
+            return highRiskLine is null ? "先去闭环" : $"先看 {highRiskLine.LineName}";
+        }
+
+        if (_attentionRows.Count > 0)
+        {
+            return "先复核记录";
+        }
+
+        return "看趋势复盘";
     }
 
     private static IReadOnlyList<LineSummaryRow> BuildLineRows(IReadOnlyList<InspectionRecordViewModel> records)
@@ -861,6 +890,20 @@ internal sealed class InspectionAnalyticsControl : UserControl
         var prefix = record.IsClosed ? "已闭环" : "待跟进";
         var detail = string.IsNullOrWhiteSpace(record.Remark) ? record.ActionRemark : record.Remark;
         return string.IsNullOrWhiteSpace(detail) ? prefix : $"{prefix} · {detail}";
+    }
+
+    private sealed class BufferedPanel : Panel
+    {
+        public BufferedPanel()
+        {
+            DoubleBuffered = true;
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.ResizeRedraw,
+                true);
+            UpdateStyles();
+        }
     }
 
     private sealed class BufferedDataGridView : DataGridView

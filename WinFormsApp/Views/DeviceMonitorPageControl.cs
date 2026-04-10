@@ -6,17 +6,16 @@ namespace WinFormsApp.Views;
 
 internal sealed class DeviceMonitorPageControl : UserControl
 {
-    private static readonly Color PageBackground = Color.FromArgb(10, 10, 15);
-    private static readonly Color SurfaceBackground = Color.FromArgb(28, 30, 40);
-    private static readonly Color HeaderBackground = Color.FromArgb(22, 24, 33);
-    private static readonly Color SurfaceBorder = Color.FromArgb(80, 85, 110);
-    private static readonly Color TextPrimaryColor = Color.FromArgb(255, 255, 255);
-    private static readonly Color TextSecondaryColor = Color.FromArgb(210, 215, 230);
-    private static readonly Color TextMutedColor = Color.FromArgb(160, 170, 190);
-    private static readonly Color AccentBlue = Color.FromArgb(88, 130, 255);
-    private static readonly Color SuccessColor = Color.FromArgb(39, 174, 96);
-    private static readonly Color WarningColor = Color.FromArgb(241, 196, 15);
-    private static readonly Color DangerColor = Color.FromArgb(231, 76, 60);
+    private static readonly Color PageBackground = PageChrome.PageBackground;
+    private static readonly Color SurfaceBackground = PageChrome.SurfaceBackground;
+    private static readonly Color SurfaceBorder = PageChrome.SurfaceBorder;
+    private static readonly Color TextPrimaryColor = PageChrome.TextPrimary;
+    private static readonly Color TextSecondaryColor = PageChrome.TextSecondary;
+    private static readonly Color TextMutedColor = PageChrome.TextMuted;
+    private static readonly Color AccentBlue = PageChrome.AccentBlue;
+    private static readonly Color SuccessColor = PageChrome.AccentGreen;
+    private static readonly Color WarningColor = PageChrome.AccentOrange;
+    private static readonly Color DangerColor = PageChrome.AccentRed;
 
     private readonly InspectionController _inspectionController;
     private readonly Label _generatedAtLabel;
@@ -42,9 +41,9 @@ internal sealed class DeviceMonitorPageControl : UserControl
         Dock = DockStyle.Fill;
         BackColor = PageBackground;
         Font = new Font("Microsoft YaHei UI", 9F);
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = PageChrome.PagePadding;
 
-        _generatedAtLabel = CreateInfoLabel();
+        _generatedAtLabel = PageChrome.CreateInfoLabel();
         var refreshButton = CreateRefreshButton();
         refreshButton.Click += (_, _) => RefreshData();
 
@@ -56,11 +55,14 @@ internal sealed class DeviceMonitorPageControl : UserControl
             RowCount = 3
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 132F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        root.Controls.Add(BuildHeader(refreshButton), 0, 0);
+        var header = BuildHeader(refreshButton);
+        PageChrome.BindControlHeightToRow(root, 0, header);
+
+        root.Controls.Add(header, 0, 0);
         root.Controls.Add(BuildSummaryArea(), 0, 1);
         root.Controls.Add(BuildBodyArea(), 0, 2);
 
@@ -134,7 +136,7 @@ internal sealed class DeviceMonitorPageControl : UserControl
             _issueDeviceValueLabel.Text = "--";
             _issueDeviceNoteLabel.Text = "暂时没有设备数据";
             _focusDeviceLabel.Text = "暂无重点设备";
-            _focusDetailLabel.Text = "等有巡检记录后，这里再显示关注设备。";
+            _focusDetailLabel.Text = "等有巡检记录后，这里再显示需要优先处理的设备。";
         }
         else
         {
@@ -155,86 +157,19 @@ internal sealed class DeviceMonitorPageControl : UserControl
 
     public void ApplyTheme()
     {
-        ApplyDarkVisualTree(this);
+        BackColor = PageBackground;
+        PageChrome.ApplyGridTheme(_deviceGrid);
+        PageChrome.ApplyGridTheme(_attentionGrid);
+        Invalidate(true);
     }
 
     private Control BuildHeader(Button refreshButton)
     {
-        var header = CreateCardPanel();
-        header.Padding = new Padding(18, 10, 18, 10);
-        header.Margin = new Padding(0, 0, 0, 12);
-
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 20F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Text = "设备监控"
-        };
-        var subtitleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 9.5F),
-            ForeColor = TextMutedColor,
-            Text = "先把设备维度的工作面做出来，首页后面只抽摘要。"
-        };
-
-        var titlePanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 3,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        titlePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        titleLabel.Dock = DockStyle.Top;
-        titleLabel.Margin = new Padding(0, 0, 0, 2);
-        titleLabel.Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold);
-        subtitleLabel.Dock = DockStyle.Top;
-        subtitleLabel.Margin = new Padding(0, 0, 0, 2);
-        subtitleLabel.Font = new Font("Microsoft YaHei UI", 9F);
-        subtitleLabel.ForeColor = TextSecondaryColor;
-        _generatedAtLabel.Dock = DockStyle.Top;
-        _generatedAtLabel.Margin = Padding.Empty;
-        titlePanel.Controls.Add(titleLabel, 0, 0);
-        titlePanel.Controls.Add(subtitleLabel, 0, 1);
-        titlePanel.Controls.Add(_generatedAtLabel, 0, 2);
-
-        var actionPanel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            BackColor = Color.Transparent,
-            Margin = Padding.Empty
-        };
-        refreshButton.Margin = Padding.Empty;
-        actionPanel.Controls.Add(refreshButton);
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layout.Controls.Add(titlePanel, 0, 0);
-        layout.Controls.Add(actionPanel, 1, 0);
-
-        header.Controls.Add(layout);
-        return header;
+        return PageChrome.CreatePageHeader(
+            "设备监控",
+            "先把设备维度的工作面做出来，首页后面只抽摘要。",
+            _generatedAtLabel,
+            refreshButton);
     }
 
     private Control BuildSummaryArea()
@@ -254,23 +189,22 @@ internal sealed class DeviceMonitorPageControl : UserControl
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
         }
 
-        _deviceCountValueLabel = CreateMetricValueLabel();
-        var deviceNoteLabel = CreateMetricNoteLabel("当前有巡检数据的设备数");
+        _deviceCountValueLabel = PageChrome.CreateValueLabel();
+        var deviceNoteLabel = PageChrome.CreateNoteLabel("当前有巡检数据的设备数");
 
-        _issueDeviceValueLabel = CreateMetricValueLabel();
-        _issueDeviceValueLabel.Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold);
-        _issueDeviceNoteLabel = CreateMetricNoteLabel();
+        _issueDeviceValueLabel = PageChrome.CreateValueLabel(16F);
+        _issueDeviceNoteLabel = PageChrome.CreateNoteLabel();
 
-        _pendingCountValueLabel = CreateMetricValueLabel();
-        _pendingCountNoteLabel = CreateMetricNoteLabel();
+        _pendingCountValueLabel = PageChrome.CreateValueLabel();
+        _pendingCountNoteLabel = PageChrome.CreateNoteLabel();
 
-        _healthyCountValueLabel = CreateMetricValueLabel();
-        _healthyCountNoteLabel = CreateMetricNoteLabel();
+        _healthyCountValueLabel = PageChrome.CreateValueLabel();
+        _healthyCountNoteLabel = PageChrome.CreateNoteLabel();
 
-        layout.Controls.Add(BuildMetricCard("设备总数", _deviceCountValueLabel, deviceNoteLabel, AccentBlue), 0, 0);
-        layout.Controls.Add(BuildMetricCard("当前关注设备", _issueDeviceValueLabel, _issueDeviceNoteLabel, WarningColor), 1, 0);
-        layout.Controls.Add(BuildMetricCard("待处理设备", _pendingCountValueLabel, _pendingCountNoteLabel, DangerColor), 2, 0);
-        layout.Controls.Add(BuildMetricCard("状态稳定", _healthyCountValueLabel, _healthyCountNoteLabel, SuccessColor), 3, 0);
+        layout.Controls.Add(PageChrome.CreateMetricCard("设备总数", AccentBlue, _deviceCountValueLabel, deviceNoteLabel), 0, 0);
+        layout.Controls.Add(PageChrome.CreateMetricCard("当前关注设备", WarningColor, _issueDeviceValueLabel, _issueDeviceNoteLabel), 1, 0);
+        layout.Controls.Add(PageChrome.CreateMetricCard("待处理设备", DangerColor, _pendingCountValueLabel, _pendingCountNoteLabel), 2, 0);
+        layout.Controls.Add(PageChrome.CreateMetricCard("状态稳定", SuccessColor, _healthyCountValueLabel, _healthyCountNoteLabel, Padding.Empty), 3, 0);
         return layout;
     }
 
@@ -285,6 +219,7 @@ internal sealed class DeviceMonitorPageControl : UserControl
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 64F));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         _deviceGrid = CreateGrid();
         _deviceGrid.Columns.Add(CreateTextColumn(nameof(DeviceRow.LineName), "产线", 90));
@@ -296,12 +231,12 @@ internal sealed class DeviceMonitorPageControl : UserControl
         _deviceGrid.Columns.Add(CreateTextColumn(nameof(DeviceRow.Inspector), "巡检人", 90));
         _deviceGrid.CellFormatting += DeviceGridOnCellFormatting;
 
-        var devicePanel = CreateCardPanel();
-        devicePanel.Padding = new Padding(20, 18, 20, 20);
-        _deviceGrid.Dock = DockStyle.Fill;
-        _deviceGrid.Margin = new Padding(0, 60, 0, 0);
-        devicePanel.Controls.Add(_deviceGrid);
-        devicePanel.Controls.Add(BuildSectionHeader("设备列表", "详细控制和更多参数后面继续往这个页面里加。"));
+        var devicePanel = PageChrome.CreateSectionShell(
+            "设备列表",
+            "详细控制和更多参数后面继续往这个页面里加。",
+            out _,
+            _deviceGrid,
+            new Padding(0, 0, 12, 0));
 
         var rightLayout = new TableLayoutPanel
         {
@@ -309,53 +244,68 @@ internal sealed class DeviceMonitorPageControl : UserControl
             BackColor = Color.Transparent,
             ColumnCount = 1,
             RowCount = 2,
-            Margin = new Padding(12, 0, 0, 0)
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
         rightLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140F));
+        rightLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 188F));
         rightLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        _focusDeviceLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Text = "--"
-        };
-        _focusDetailLabel = new Label
+        _focusDeviceLabel = PageChrome.CreateValueLabel(16F);
+        _focusDeviceLabel.Dock = DockStyle.Top;
+        _focusDeviceLabel.Margin = Padding.Empty;
+        _focusDetailLabel = PageChrome.CreateNoteLabel();
+        _focusDetailLabel.AutoSize = false;
+        _focusDetailLabel.Dock = DockStyle.Fill;
+        _focusDetailLabel.TextAlign = ContentAlignment.TopLeft;
+
+        var focusContent = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Font = new Font("Microsoft YaHei UI", 9.5F),
-            ForeColor = TextSecondaryColor,
-            Text = string.Empty
+            BackColor = Color.Transparent,
+            ColumnCount = 1,
+            RowCount = 3,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
+        focusContent.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        focusContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        focusContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        focusContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        focusContent.Controls.Add(PageChrome.CreateNoteLabel("这里固定放最该先看的那台设备。", 8.8F, TextMutedColor), 0, 0);
+        focusContent.Controls.Add(_focusDeviceLabel, 0, 1);
+        focusContent.Controls.Add(_focusDetailLabel, 0, 2);
 
-        var focusPanel = CreateCardPanel();
-        focusPanel.Padding = new Padding(20, 18, 20, 18);
-        focusPanel.Controls.Add(_focusDetailLabel);
-        focusPanel.Controls.Add(_focusDeviceLabel);
-        focusPanel.Controls.Add(BuildSectionHeader("重点设备", "先处理最该看的设备，首页以后只显示这条摘要。"));
-        _focusDetailLabel.BringToFront();
-        _focusDetailLabel.Dock = DockStyle.Bottom;
-        _focusDeviceLabel.Location = new Point(20, 60);
+        var focusPanel = PageChrome.CreateSectionShell(
+            "重点设备",
+            "先处理最该看的设备，首页以后只显示这条摘要。",
+            out _,
+            focusContent,
+            new Padding(0, 0, 0, 12));
 
         _attentionGrid = CreateGrid();
         _attentionGrid.Columns.Add(CreateTextColumn(nameof(AttentionRow.DeviceName), "设备", 120));
-        _attentionGrid.Columns.Add(CreateTextColumn(nameof(AttentionRow.InspectionItem), "问题项", 120));
+        _attentionGrid.Columns.Add(CreateTextColumn(nameof(AttentionRow.InspectionItem), "问题项", 150));
         _attentionGrid.Columns.Add(CreateTextColumn(nameof(AttentionRow.StatusText), "状态", 70));
-        _attentionGrid.Columns.Add(CreateTextColumn(nameof(AttentionRow.CheckedAt), "时间", 120));
-        _attentionGrid.Columns.Add(CreateTextColumn(nameof(AttentionRow.Detail), "说明", 140));
+        _attentionGrid.Columns.Add(CreateTextColumn(nameof(AttentionRow.CheckedAt), "时间", 100));
+        _attentionGrid.Columns.Add(CreateTextColumn(nameof(AttentionRow.Detail), "补充", 150));
         _attentionGrid.CellFormatting += AttentionGridOnCellFormatting;
-        _attentionGrid.Columns[_attentionGrid.Columns.Count - 1].Visible = false;
 
-        var attentionPanel = CreateCardPanel();
-        attentionPanel.Padding = new Padding(20, 18, 20, 20);
-        _attentionEmptyLabel = CreateEmptyStateLabel("暂无未闭环问题");
-        _attentionGrid.Dock = DockStyle.Fill;
-        _attentionGrid.Margin = new Padding(0, 60, 0, 0);
-        attentionPanel.Controls.Add(_attentionGrid);
-        attentionPanel.Controls.Add(_attentionEmptyLabel);
-        attentionPanel.Controls.Add(BuildSectionHeader("最新关注", "这里只看未闭环问题，真正处理去报警中心和巡检页。"));
+        _attentionEmptyLabel = PageChrome.CreateEmptyStateLabel("当前没有待关注记录");
+        var attentionBody = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent
+        };
+        attentionBody.Controls.Add(_attentionGrid);
+        attentionBody.Controls.Add(_attentionEmptyLabel);
+
+        var attentionPanel = PageChrome.CreateSectionShell(
+            "最近关注",
+            "只放最需要马上看见的几条。",
+            out _,
+            attentionBody,
+            Padding.Empty);
 
         rightLayout.Controls.Add(focusPanel, 0, 0);
         rightLayout.Controls.Add(attentionPanel, 0, 1);
@@ -421,116 +371,6 @@ internal sealed class DeviceMonitorPageControl : UserControl
         }
     }
 
-    private static Control BuildMetricCard(string title, Label valueLabel, Label noteLabel, Color accentColor)
-    {
-        var card = CreateCardPanel();
-        card.Margin = new Padding(0, 0, 12, 0);
-        card.Padding = new Padding(18, 14, 18, 14);
-
-        var shell = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 4F));
-        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-        var accent = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Margin = Padding.Empty,
-            BackColor = accentColor
-        };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 2,
-            Margin = new Padding(14, 0, 0, 0),
-            Padding = new Padding(0, 6, 0, 0)
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Dock = DockStyle.Top,
-            Font = new Font("Microsoft YaHei UI", 9F),
-            ForeColor = TextMutedColor,
-            Margin = new Padding(0, 2, 0, 6),
-            Text = title
-        };
-        valueLabel.Dock = DockStyle.Right;
-        valueLabel.Margin = new Padding(16, 0, 0, 0);
-        valueLabel.TextAlign = ContentAlignment.MiddleRight;
-        noteLabel.AutoSize = false;
-        noteLabel.AutoEllipsis = true;
-        noteLabel.Dock = DockStyle.Fill;
-        noteLabel.Margin = new Padding(0, 2, 0, 0);
-        noteLabel.TextAlign = ContentAlignment.TopLeft;
-
-        layout.Controls.Add(titleLabel, 0, 0);
-        layout.Controls.Add(valueLabel, 1, 0);
-        layout.Controls.Add(noteLabel, 0, 1);
-        layout.SetColumnSpan(noteLabel, 2);
-
-        shell.Controls.Add(accent, 0, 0);
-        shell.Controls.Add(layout, 1, 0);
-        card.Controls.Add(shell);
-        return card;
-    }
-
-    private static Control BuildSectionHeader(string title, string subtitle)
-    {
-        var host = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 48,
-            BackColor = Color.Transparent
-        };
-
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 12.5F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Text = title,
-            Location = new Point(0, 0)
-        };
-        var subtitleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 8.8F),
-            ForeColor = TextMutedColor,
-            Text = subtitle,
-            Location = new Point(0, 24)
-        };
-
-        host.Controls.Add(titleLabel);
-        host.Controls.Add(subtitleLabel);
-        return host;
-    }
-
-    private static BufferedPanel CreateCardPanel()
-    {
-        return new BufferedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = SurfaceBackground,
-            Margin = new Padding(0)
-        };
-    }
-
     private static DataGridView CreateGrid()
     {
         var grid = new DataGridView
@@ -551,113 +391,13 @@ internal sealed class DeviceMonitorPageControl : UserControl
             SelectionMode = DataGridViewSelectionMode.FullRowSelect
         };
 
-        grid.ColumnHeadersDefaultCellStyle.BackColor = HeaderBackground;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimaryColor;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-        grid.DefaultCellStyle.BackColor = SurfaceBackground;
-        grid.DefaultCellStyle.ForeColor = TextSecondaryColor;
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(45, 56, 78);
-        grid.DefaultCellStyle.SelectionForeColor = TextPrimaryColor;
-        grid.GridColor = SurfaceBorder;
+        PageChrome.ApplyGridTheme(grid);
         return grid;
     }
 
     private static Button CreateRefreshButton()
     {
-        var button = new Button
-        {
-            AutoSize = true,
-            BackColor = AccentBlue,
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Margin = new Padding(0, 0, 0, 6),
-            Padding = new Padding(14, 6, 14, 6),
-            Text = "刷新监控",
-            UseVisualStyleBackColor = false
-        };
-        button.FlatAppearance.BorderSize = 0;
-        return button;
-    }
-
-    private static Label CreateInfoLabel()
-    {
-        return new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 8.8F),
-            ForeColor = TextMutedColor,
-            Margin = new Padding(0)
-        };
-    }
-
-    private static Label CreateMetricValueLabel()
-    {
-        return new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 18F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor
-        };
-    }
-
-    private static Label CreateMetricNoteLabel(string text = "")
-    {
-        return new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 8.8F),
-            ForeColor = TextMutedColor,
-            Text = text
-        };
-    }
-
-    private static Label CreateEmptyStateLabel(string text)
-    {
-        return new Label
-        {
-            Dock = DockStyle.Fill,
-            Font = new Font("Microsoft YaHei UI", 9.5F),
-            ForeColor = TextMutedColor,
-            Text = text,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Visible = false
-        };
-    }
-
-    private static void ApplyDarkVisualTree(Control root)
-    {
-        foreach (Control control in root.Controls)
-        {
-            switch (control)
-            {
-                case TableLayoutPanel table:
-                    table.BackColor = Color.Transparent;
-                    break;
-                case FlowLayoutPanel flow:
-                    flow.BackColor = Color.Transparent;
-                    break;
-                case Panel panel:
-                    panel.BackColor = panel.BackColor == Color.Transparent ? Color.Transparent : SurfaceBackground;
-                    break;
-                case Label label:
-                    if (label.ForeColor == default)
-                    {
-                        label.ForeColor = TextSecondaryColor;
-                    }
-                    break;
-                case Button button:
-                    button.BackColor = AccentBlue;
-                    button.ForeColor = TextPrimaryColor;
-                    break;
-                case DataGridView grid:
-                    grid.BackgroundColor = SurfaceBackground;
-                    grid.GridColor = SurfaceBorder;
-                    break;
-            }
-
-            ApplyDarkVisualTree(control);
-        }
+        return PageChrome.CreateActionButton("刷新监控", AccentBlue, true);
     }
 
     private sealed class DeviceRow

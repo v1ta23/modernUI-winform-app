@@ -6,17 +6,14 @@ namespace WinFormsApp.Views;
 
 internal sealed class AlarmCenterPageControl : UserControl
 {
-    private static readonly Color PageBackground = Color.FromArgb(10, 10, 15);
-    private static readonly Color SurfaceBackground = Color.FromArgb(28, 30, 40);
-    private static readonly Color HeaderBackground = Color.FromArgb(22, 24, 33);
-    private static readonly Color SurfaceBorder = Color.FromArgb(80, 85, 110);
-    private static readonly Color TextPrimaryColor = Color.FromArgb(255, 255, 255);
-    private static readonly Color TextSecondaryColor = Color.FromArgb(210, 215, 230);
-    private static readonly Color TextMutedColor = Color.FromArgb(160, 170, 190);
-    private static readonly Color AccentBlue = Color.FromArgb(88, 130, 255);
-    private static readonly Color WarningColor = Color.FromArgb(241, 196, 15);
-    private static readonly Color DangerColor = Color.FromArgb(231, 76, 60);
-    private static readonly Color SuccessColor = Color.FromArgb(39, 174, 96);
+    private static readonly Color PageBackground = PageChrome.PageBackground;
+    private static readonly Color SurfaceBackground = PageChrome.SurfaceBackground;
+    private static readonly Color TextPrimaryColor = PageChrome.TextPrimary;
+    private static readonly Color TextSecondaryColor = PageChrome.TextSecondary;
+    private static readonly Color AccentBlue = PageChrome.AccentBlue;
+    private static readonly Color WarningColor = PageChrome.AccentOrange;
+    private static readonly Color DangerColor = PageChrome.AccentRed;
+    private static readonly Color SuccessColor = PageChrome.AccentGreen;
 
     private readonly string _account;
     private readonly InspectionController _inspectionController;
@@ -41,9 +38,9 @@ internal sealed class AlarmCenterPageControl : UserControl
         Dock = DockStyle.Fill;
         BackColor = PageBackground;
         Font = new Font("Microsoft YaHei UI", 9F);
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = PageChrome.PagePadding;
 
-        _generatedAtLabel = CreateInfoLabel();
+        _generatedAtLabel = PageChrome.CreateInfoLabel();
         var refreshButton = CreateRefreshButton();
         refreshButton.Click += (_, _) => RefreshData();
         var closeButton = CreateCloseButton();
@@ -57,11 +54,14 @@ internal sealed class AlarmCenterPageControl : UserControl
             RowCount = 3
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 132F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        root.Controls.Add(BuildHeader(refreshButton, closeButton), 0, 0);
+        var header = BuildHeader(refreshButton, closeButton);
+        PageChrome.BindControlHeightToRow(root, 0, header);
+
+        root.Controls.Add(header, 0, 0);
         root.Controls.Add(BuildSummaryArea(), 0, 1);
         root.Controls.Add(BuildBodyArea(), 0, 2);
 
@@ -103,88 +103,20 @@ internal sealed class AlarmCenterPageControl : UserControl
 
     public void ApplyTheme()
     {
-        ApplyDarkVisualTree(this);
+        BackColor = PageBackground;
+        PageChrome.ApplyGridTheme(_pendingGrid);
+        PageChrome.ApplyGridTheme(_historyGrid);
+        Invalidate(true);
     }
 
     private Control BuildHeader(Button refreshButton, Button closeButton)
     {
-        var header = CreateCardPanel();
-        header.Padding = new Padding(18, 10, 18, 10);
-        header.Margin = new Padding(0, 0, 0, 12);
-
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 20F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Text = "报警中心"
-        };
-        var subtitleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 9.5F),
-            ForeColor = TextMutedColor,
-            Text = "这里看完整告警列表和处理状态，首页后面只挑重点摘要。"
-        };
-
-        var titlePanel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 3,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        titlePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        titleLabel.Dock = DockStyle.Top;
-        titleLabel.Margin = new Padding(0, 0, 0, 2);
-        titleLabel.Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold);
-        subtitleLabel.Dock = DockStyle.Top;
-        subtitleLabel.Margin = new Padding(0, 0, 0, 2);
-        subtitleLabel.Font = new Font("Microsoft YaHei UI", 9F);
-        subtitleLabel.ForeColor = TextSecondaryColor;
-        _generatedAtLabel.Dock = DockStyle.Top;
-        _generatedAtLabel.Margin = Padding.Empty;
-        titlePanel.Controls.Add(titleLabel, 0, 0);
-        titlePanel.Controls.Add(subtitleLabel, 0, 1);
-        titlePanel.Controls.Add(_generatedAtLabel, 0, 2);
-
-        var actionPanel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            BackColor = Color.Transparent,
-            Margin = Padding.Empty
-        };
-        closeButton.Margin = new Padding(10, 0, 0, 0);
-        refreshButton.Margin = Padding.Empty;
-        actionPanel.Controls.Add(refreshButton);
-        actionPanel.Controls.Add(closeButton);
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layout.Controls.Add(titlePanel, 0, 0);
-        layout.Controls.Add(actionPanel, 1, 0);
-
-        header.Controls.Add(layout);
-        return header;
+        return PageChrome.CreatePageHeader(
+            "报警中心",
+            "这里看完整告警列表和处理状态，首页后面只挑重点摘要。",
+            _generatedAtLabel,
+            refreshButton,
+            closeButton);
     }
 
     private Control BuildSummaryArea()
@@ -204,15 +136,15 @@ internal sealed class AlarmCenterPageControl : UserControl
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
         }
 
-        _pendingValueLabel = CreateMetricValueLabel();
-        _abnormalValueLabel = CreateMetricValueLabel();
-        _warningValueLabel = CreateMetricValueLabel();
-        _closedValueLabel = CreateMetricValueLabel();
+        _pendingValueLabel = PageChrome.CreateValueLabel();
+        _abnormalValueLabel = PageChrome.CreateValueLabel();
+        _warningValueLabel = PageChrome.CreateValueLabel();
+        _closedValueLabel = PageChrome.CreateValueLabel();
 
-        layout.Controls.Add(BuildMetricCard("待处理总数", _pendingValueLabel, "未闭环的预警和异常", DangerColor), 0, 0);
-        layout.Controls.Add(BuildMetricCard("异常", _abnormalValueLabel, "优先级最高，建议先处理", DangerColor), 1, 0);
-        layout.Controls.Add(BuildMetricCard("预警", _warningValueLabel, "可安排巡检复核", WarningColor), 2, 0);
-        layout.Controls.Add(BuildMetricCard("最近闭环", _closedValueLabel, "方便回看最近处理结果", SuccessColor), 3, 0);
+        layout.Controls.Add(PageChrome.CreateMetricCard("待处理总数", DangerColor, _pendingValueLabel, PageChrome.CreateNoteLabel("未闭环的预警和异常")), 0, 0);
+        layout.Controls.Add(PageChrome.CreateMetricCard("异常", DangerColor, _abnormalValueLabel, PageChrome.CreateNoteLabel("优先级最高，建议先处理")), 1, 0);
+        layout.Controls.Add(PageChrome.CreateMetricCard("预警", WarningColor, _warningValueLabel, PageChrome.CreateNoteLabel("可安排巡检复核")), 2, 0);
+        layout.Controls.Add(PageChrome.CreateMetricCard("最近闭环", SuccessColor, _closedValueLabel, PageChrome.CreateNoteLabel("方便回看最近处理结果"), Padding.Empty), 3, 0);
         return layout;
     }
 
@@ -241,10 +173,12 @@ internal sealed class AlarmCenterPageControl : UserControl
         _pendingGrid.CellFormatting += GridOnCellFormatting;
         _pendingGrid.CellDoubleClick += (_, _) => CloseSelectedAlarm();
 
-        var pendingPanel = CreateCardPanel();
-        pendingPanel.Padding = new Padding(20, 18, 20, 20);
-        pendingPanel.Controls.Add(_pendingGrid);
-        pendingPanel.Controls.Add(BuildSectionHeader("待处理告警", "这里看完整清单，确认、闭环动作仍通过巡检流程完成。"));
+        var pendingPanel = PageChrome.CreateSectionShell(
+            "待处理告警",
+            "这里看完整清单，确认、闭环动作仍通过巡检流程完成。",
+            out _,
+            _pendingGrid,
+            new Padding(0, 0, 0, 12));
 
         _historyGrid = CreateGrid();
         _historyGrid.Columns.Add(CreateTextColumn(nameof(AlarmRow.CheckedAt), "时间", 140));
@@ -256,13 +190,21 @@ internal sealed class AlarmCenterPageControl : UserControl
         _historyGrid.Columns.Add(CreateTextColumn(nameof(AlarmRow.Remark), "处理说明", 320));
         _historyGrid.CellFormatting += GridOnCellFormatting;
 
-        var historyPanel = CreateCardPanel();
-        historyPanel.Padding = new Padding(20, 18, 20, 20);
-        historyPanel.Margin = new Padding(0, 12, 0, 0);
-        _historyEmptyLabel = CreateEmptyStateLabel("暂无闭环记录");
-        historyPanel.Controls.Add(_historyGrid);
-        historyPanel.Controls.Add(_historyEmptyLabel);
-        historyPanel.Controls.Add(BuildSectionHeader("最近闭环", "只保留最近处理完的记录，方便回看。"));
+        _historyEmptyLabel = PageChrome.CreateEmptyStateLabel("暂无闭环记录");
+        var historyBody = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent
+        };
+        historyBody.Controls.Add(_historyGrid);
+        historyBody.Controls.Add(_historyEmptyLabel);
+
+        var historyPanel = PageChrome.CreateSectionShell(
+            "最近闭环",
+            "只保留最近处理完的记录，方便回看。",
+            out _,
+            historyBody,
+            Padding.Empty);
 
         layout.Controls.Add(pendingPanel, 0, 0);
         layout.Controls.Add(historyPanel, 0, 1);
@@ -367,45 +309,52 @@ internal sealed class AlarmCenterPageControl : UserControl
             ShowInTaskbar = false
         };
 
-        var shell = new BufferedPanel
+        var shell = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = PageBackground,
-            Padding = new Padding(18)
+            Padding = PageChrome.PagePadding
         };
 
-        var card = CreateCardPanel();
+        var card = PageChrome.CreateSurfacePanel(new Padding(18));
         card.Dock = DockStyle.Fill;
-        card.Padding = new Padding(18);
 
-        var descriptionLabel = new Label
+        var layout = new TableLayoutPanel
         {
-            AutoSize = true,
-            Dock = DockStyle.Top,
-            ForeColor = TextSecondaryColor,
-            Text = description
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent,
+            ColumnCount = 1,
+            RowCount = 3,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
+        var descriptionLabel = PageChrome.CreateTextLabel(description, 9F, FontStyle.Regular, TextSecondaryColor, new Padding(0, 0, 0, 12));
         var inputBox = new TextBox
         {
             Dock = DockStyle.Fill,
             Multiline = true,
-            BackColor = Color.FromArgb(18, 22, 30),
+            BackColor = PageChrome.InputBackground,
             ForeColor = TextPrimaryColor,
             BorderStyle = BorderStyle.FixedSingle
         };
 
         var buttonPanel = new FlowLayoutPanel
         {
-            Dock = DockStyle.Bottom,
+            Dock = DockStyle.Top,
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Padding = new Padding(0, 12, 0, 0)
+            Padding = new Padding(0, 12, 0, 0),
+            BackColor = Color.Transparent
         };
 
-        var confirmButton = CreateRefreshButton();
-        confirmButton.Text = confirmText;
+        var confirmButton = PageChrome.CreateActionButton(confirmText, AccentBlue, true);
         confirmButton.Click += (_, _) =>
         {
             if (string.IsNullOrWhiteSpace(inputBox.Text))
@@ -418,8 +367,8 @@ internal sealed class AlarmCenterPageControl : UserControl
             window.Close();
         };
 
-        var cancelButton = CreateCloseButton();
-        cancelButton.Text = "取消";
+        var cancelButton = PageChrome.CreateActionButton("取消", DangerColor, false);
+        cancelButton.Margin = new Padding(10, 0, 0, 0);
         cancelButton.Click += (_, _) =>
         {
             window.DialogResult = DialogResult.Cancel;
@@ -429,12 +378,12 @@ internal sealed class AlarmCenterPageControl : UserControl
         buttonPanel.Controls.Add(confirmButton);
         buttonPanel.Controls.Add(cancelButton);
 
-        card.Controls.Add(inputBox);
-        card.Controls.Add(buttonPanel);
-        card.Controls.Add(descriptionLabel);
+        layout.Controls.Add(descriptionLabel, 0, 0);
+        layout.Controls.Add(inputBox, 0, 1);
+        layout.Controls.Add(buttonPanel, 0, 2);
+        card.Controls.Add(layout);
         shell.Controls.Add(card);
         window.Controls.Add(shell);
-        ApplyDarkVisualTree(window);
 
         return window.ShowDialog(this) == DialogResult.OK
             ? inputBox.Text.Trim()
@@ -454,122 +403,6 @@ internal sealed class AlarmCenterPageControl : UserControl
             ProcessingState = processingState,
             Inspector = record.Inspector,
             Remark = string.IsNullOrWhiteSpace(record.ActionRemark) ? record.Remark : record.ActionRemark
-        };
-    }
-
-    private static Control BuildMetricCard(string title, Label valueLabel, string note, Color accentColor)
-    {
-        var card = CreateCardPanel();
-        card.Margin = new Padding(0, 0, 12, 0);
-        card.Padding = new Padding(18, 14, 18, 14);
-
-        var shell = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 4F));
-        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-        var accent = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Margin = Padding.Empty,
-            BackColor = accentColor
-        };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 2,
-            RowCount = 2,
-            Margin = new Padding(14, 0, 0, 0),
-            Padding = new Padding(0, 6, 0, 0)
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Dock = DockStyle.Top,
-            Font = new Font("Microsoft YaHei UI", 9F),
-            ForeColor = TextMutedColor,
-            Margin = new Padding(0, 2, 0, 6),
-            Text = title
-        };
-        valueLabel.Dock = DockStyle.Right;
-        valueLabel.Margin = new Padding(16, 0, 0, 0);
-        valueLabel.TextAlign = ContentAlignment.MiddleRight;
-        var noteLabel = new Label
-        {
-            AutoSize = false,
-            AutoEllipsis = true,
-            Dock = DockStyle.Fill,
-            Font = new Font("Microsoft YaHei UI", 8.8F),
-            ForeColor = TextMutedColor,
-            Margin = new Padding(0, 2, 0, 0),
-            Text = note,
-            TextAlign = ContentAlignment.TopLeft
-        };
-
-        layout.Controls.Add(titleLabel, 0, 0);
-        layout.Controls.Add(valueLabel, 1, 0);
-        layout.Controls.Add(noteLabel, 0, 1);
-        layout.SetColumnSpan(noteLabel, 2);
-
-        shell.Controls.Add(accent, 0, 0);
-        shell.Controls.Add(layout, 1, 0);
-        card.Controls.Add(shell);
-        return card;
-    }
-
-    private static Control BuildSectionHeader(string title, string subtitle)
-    {
-        var host = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 48,
-            BackColor = Color.Transparent
-        };
-
-        var titleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 12.5F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Text = title,
-            Location = new Point(0, 0)
-        };
-        var subtitleLabel = new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 8.8F),
-            ForeColor = TextMutedColor,
-            Text = subtitle,
-            Location = new Point(0, 24)
-        };
-
-        host.Controls.Add(titleLabel);
-        host.Controls.Add(subtitleLabel);
-        return host;
-    }
-
-    private static BufferedPanel CreateCardPanel()
-    {
-        return new BufferedPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = SurfaceBackground,
-            Margin = new Padding(0)
         };
     }
 
@@ -593,14 +426,7 @@ internal sealed class AlarmCenterPageControl : UserControl
             SelectionMode = DataGridViewSelectionMode.FullRowSelect
         };
 
-        grid.ColumnHeadersDefaultCellStyle.BackColor = HeaderBackground;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimaryColor;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-        grid.DefaultCellStyle.BackColor = SurfaceBackground;
-        grid.DefaultCellStyle.ForeColor = TextSecondaryColor;
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(45, 56, 78);
-        grid.DefaultCellStyle.SelectionForeColor = TextPrimaryColor;
-        grid.GridColor = SurfaceBorder;
+        PageChrome.ApplyGridTheme(grid);
         return grid;
     }
 
@@ -622,101 +448,12 @@ internal sealed class AlarmCenterPageControl : UserControl
 
     private static Button CreateRefreshButton()
     {
-        var button = new Button
-        {
-            AutoSize = true,
-            BackColor = AccentBlue,
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Margin = new Padding(0, 0, 0, 6),
-            Padding = new Padding(14, 6, 14, 6),
-            Text = "刷新告警",
-            UseVisualStyleBackColor = false
-        };
-        button.FlatAppearance.BorderSize = 0;
-        return button;
+        return PageChrome.CreateActionButton("刷新告警", AccentBlue, true);
     }
 
     private static Button CreateCloseButton()
     {
-        var button = new Button
-        {
-            AutoSize = true,
-            BackColor = Color.FromArgb(56, 63, 78),
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Margin = new Padding(0, 0, 0, 6),
-            Padding = new Padding(14, 6, 14, 6),
-            Text = "闭环选中告警",
-            UseVisualStyleBackColor = false
-        };
-        button.FlatAppearance.BorderColor = Color.FromArgb(86, 98, 118);
-        button.FlatAppearance.BorderSize = 1;
-        return button;
-    }
-
-    private static Label CreateInfoLabel()
-    {
-        return new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 8.8F),
-            ForeColor = TextMutedColor
-        };
-    }
-
-    private static Label CreateMetricValueLabel()
-    {
-        return new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 18F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor
-        };
-    }
-
-    private static Label CreateEmptyStateLabel(string text)
-    {
-        return new Label
-        {
-            Dock = DockStyle.Fill,
-            Font = new Font("Microsoft YaHei UI", 9.5F),
-            ForeColor = TextMutedColor,
-            Text = text,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Visible = false
-        };
-    }
-
-    private static void ApplyDarkVisualTree(Control root)
-    {
-        foreach (Control control in root.Controls)
-        {
-            switch (control)
-            {
-                case TableLayoutPanel table:
-                    table.BackColor = Color.Transparent;
-                    break;
-                case FlowLayoutPanel flow:
-                    flow.BackColor = Color.Transparent;
-                    break;
-                case Panel panel:
-                    panel.BackColor = panel.BackColor == Color.Transparent ? Color.Transparent : SurfaceBackground;
-                    break;
-                case Button button:
-                    button.BackColor = AccentBlue;
-                    button.ForeColor = TextPrimaryColor;
-                    break;
-                case DataGridView grid:
-                    grid.BackgroundColor = SurfaceBackground;
-                    grid.GridColor = SurfaceBorder;
-                    break;
-            }
-
-            ApplyDarkVisualTree(control);
-        }
+        return PageChrome.CreateActionButton("闭环选中告警", DangerColor, false);
     }
 
     private sealed class AlarmRow

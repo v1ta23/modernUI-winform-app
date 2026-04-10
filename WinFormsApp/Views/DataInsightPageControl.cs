@@ -1,10 +1,9 @@
 using App.Core.Models;
-using WinFormsApp.Controllers;
-using WinFormsApp.ViewModels;
 using Microsoft.VisualBasic.FileIO;
 using System.Data;
-using System.Drawing.Drawing2D;
 using System.Text;
+using WinFormsApp.Controllers;
+using WinFormsApp.ViewModels;
 
 namespace WinFormsApp.Views;
 
@@ -12,43 +11,44 @@ internal sealed class DataInsightPageControl : UserControl
 {
     private const int PreviewLimit = 200;
 
-    private static readonly Color PageBackground = Color.FromArgb(10, 10, 15);
-    private static readonly Color SurfaceBackground = Color.FromArgb(28, 30, 40);
-    private static readonly Color SurfaceBorder = Color.FromArgb(80, 85, 110);
-    private static readonly Color HeaderBackground = Color.FromArgb(22, 24, 33);
-    private static readonly Color TextPrimaryColor = Color.FromArgb(255, 255, 255);
-    private static readonly Color TextSecondaryColor = Color.FromArgb(210, 215, 230);
-    private static readonly Color TextMutedColor = Color.FromArgb(160, 170, 190);
-    private static readonly Color AccentBlue = Color.FromArgb(88, 130, 255);
-    private static readonly Color AccentGreen = Color.FromArgb(76, 217, 140);
-    private static readonly Color AccentOrange = Color.FromArgb(255, 165, 70);
-    private static readonly Color AccentRed = Color.FromArgb(231, 76, 60);
+    private static readonly Color PageBackground = PageChrome.PageBackground;
+    private static readonly Color SurfaceBackground = PageChrome.SurfaceBackground;
+    private static readonly Color SurfaceBorder = PageChrome.SurfaceBorder;
+    private static readonly Color InputBackground = PageChrome.InputBackground;
+    private static readonly Color TextPrimaryColor = PageChrome.TextPrimary;
+    private static readonly Color TextSecondaryColor = PageChrome.TextSecondary;
+    private static readonly Color TextMutedColor = PageChrome.TextMuted;
+    private static readonly Color AccentBlue = PageChrome.AccentBlue;
+    private static readonly Color AccentGreen = PageChrome.AccentGreen;
+    private static readonly Color AccentOrange = PageChrome.AccentOrange;
+    private static readonly Color AccentRed = PageChrome.AccentRed;
 
     private readonly InspectionController _controller;
     private readonly string _account;
     private readonly Label _generatedAtLabel;
-    private Label _fileValueLabel = null!;
-    private Label _fileNoteLabel = null!;
-    private Label _rowCountValueLabel = null!;
-    private Label _rowCountNoteLabel = null!;
-    private Label _pendingValueLabel = null!;
-    private Label _pendingNoteLabel = null!;
-    private Label _importValueLabel = null!;
-    private Label _importNoteLabel = null!;
-    private Label _workflowSubtitleLabel = null!;
-    private Label _workflowValueLabel = null!;
-    private Label _workflowNoteLabel = null!;
-    private Label _issuesSubtitleLabel = null!;
-    private Label _previewSubtitleLabel = null!;
-    private Label _analysisSubtitleLabel = null!;
     private readonly Button _selectFileButton;
     private readonly Button _clearButton;
     private readonly Button _importButton;
     private readonly Button _viewImportedButton;
     private readonly Button _viewPendingButton;
     private readonly DataGridView _previewGrid;
-    private readonly TextBox _issuesTextBox;
-    private readonly TextBox _analysisTextBox;
+    private readonly PageChrome.ReadOnlyTextBlock _validationBlock;
+    private readonly PageChrome.ReadOnlyTextBlock _nextStepBlock;
+
+    private Label _actionFileValueLabel = null!;
+    private Label _actionStatusValueLabel = null!;
+    private Label _previewSubtitleLabel = null!;
+    private Label _validationSubtitleLabel = null!;
+    private Label _statusSubtitleLabel = null!;
+    private Label _nextStepSubtitleLabel = null!;
+    private Label _statusFileValueLabel = null!;
+    private Label _statusFileNoteLabel = null!;
+    private Label _statusValidValueLabel = null!;
+    private Label _statusValidNoteLabel = null!;
+    private Label _statusRiskValueLabel = null!;
+    private Label _statusRiskNoteLabel = null!;
+    private Label _statusStateValueLabel = null!;
+    private Label _statusStateNoteLabel = null!;
 
     private CsvPreviewState? _currentPreview;
     private InspectionImportResultViewModel? _lastImportResult;
@@ -62,17 +62,17 @@ internal sealed class DataInsightPageControl : UserControl
         Dock = DockStyle.Fill;
         BackColor = PageBackground;
         Font = new Font("Microsoft YaHei UI", 9F);
-        Padding = new Padding(30, 20, 30, 20);
+        Padding = PageChrome.PagePadding;
 
-        _generatedAtLabel = CreateInfoLabel();
-        _selectFileButton = CreateActionButton("选择 CSV 文件", AccentBlue);
-        _clearButton = CreateActionButton("清空", Color.FromArgb(98, 109, 129));
-        _importButton = CreateActionButton("确认导入", AccentGreen);
-        _viewImportedButton = CreateActionButton("查看本批记录", AccentBlue);
-        _viewPendingButton = CreateActionButton("查看待闭环", AccentOrange);
+        _generatedAtLabel = PageChrome.CreateInfoLabel();
+        _selectFileButton = PageChrome.CreateActionButton("选择 CSV 文件", AccentBlue, true);
+        _clearButton = PageChrome.CreateActionButton("清空", Color.FromArgb(128, 138, 154), false);
+        _importButton = PageChrome.CreateActionButton("确认导入", AccentGreen, true);
+        _viewImportedButton = PageChrome.CreateActionButton("查看本批记录", AccentBlue, false);
+        _viewPendingButton = PageChrome.CreateActionButton("查看待闭环", AccentOrange, false);
         _previewGrid = CreatePreviewGrid();
-        _issuesTextBox = CreateAnalysisTextBox();
-        _analysisTextBox = CreateAnalysisTextBox();
+        _validationBlock = PageChrome.CreateReadOnlyTextBlock();
+        _nextStepBlock = PageChrome.CreateReadOnlyTextBlock();
 
         var root = new TableLayoutPanel
         {
@@ -82,12 +82,15 @@ internal sealed class DataInsightPageControl : UserControl
             RowCount = 3
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 124F));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 96F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        root.Controls.Add(BuildHeader(), 0, 0);
-        root.Controls.Add(BuildSummaryArea(), 0, 1);
+        var header = BuildHeader();
+        PageChrome.BindControlHeightToRow(root, 0, header);
+
+        root.Controls.Add(header, 0, 0);
+        root.Controls.Add(BuildActionBar(), 0, 1);
         root.Controls.Add(BuildWorkspaceArea(), 0, 2);
 
         Controls.Add(root);
@@ -113,13 +116,21 @@ internal sealed class DataInsightPageControl : UserControl
     public void ApplyTheme()
     {
         BackColor = PageBackground;
-        ApplyGridTheme(_previewGrid);
+        PageChrome.ApplyGridTheme(_previewGrid);
         Invalidate(true);
     }
 
     private Control BuildHeader()
     {
-        var shell = CreateSurfacePanel(new Padding(18, 10, 18, 10));
+        return PageChrome.CreatePageHeader(
+            "数据导入",
+            "这个页只负责导入，先校验再导入，后续处理回巡检页继续做。",
+            _generatedAtLabel);
+    }
+
+    private Control BuildActionBar()
+    {
+        var shell = PageChrome.CreateSurfacePanel(new Padding(20, 14, 20, 14));
         shell.Margin = new Padding(0, 0, 0, 12);
 
         var layout = new TableLayoutPanel
@@ -131,9 +142,27 @@ internal sealed class DataInsightPageControl : UserControl
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+        _actionFileValueLabel = new Label
+        {
+            AutoEllipsis = true,
+            AutoSize = false,
+            Dock = DockStyle.Top,
+            Height = 28,
+            Font = new Font("Microsoft YaHei UI", 14F, FontStyle.Bold),
+            ForeColor = TextPrimaryColor,
+            Margin = Padding.Empty,
+            Text = "--"
+        };
+        _actionStatusValueLabel = PageChrome.CreateNoteLabel();
+        _actionStatusValueLabel.Dock = DockStyle.Top;
+        _actionStatusValueLabel.Margin = new Padding(0, 6, 0, 0);
 
         var titlePanel = new TableLayoutPanel
         {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
             ColumnCount = 1,
@@ -145,60 +174,30 @@ internal sealed class DataInsightPageControl : UserControl
         titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         titlePanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        titlePanel.Controls.Add(PageChrome.CreateNoteLabel("当前文件", 8.8F, TextMutedColor), 0, 0);
+        titlePanel.Controls.Add(_actionFileValueLabel, 0, 1);
+        titlePanel.Controls.Add(_actionStatusValueLabel, 0, 2);
 
-        titlePanel.Controls.Add(CreateTextLabel("数据导入", 16F, FontStyle.Bold, TextPrimaryColor, new Padding(0, 0, 0, 2)), 0, 0);
-        titlePanel.Controls.Add(CreateTextLabel("这个页只负责导入。先校验，再导入，后续处理回巡检页继续做。", 9F, FontStyle.Regular, TextSecondaryColor, new Padding(0, 0, 0, 2)), 0, 1);
-        _generatedAtLabel.Dock = DockStyle.Top;
-        titlePanel.Controls.Add(_generatedAtLabel, 0, 2);
-
-        var actionPanel = new FlowLayoutPanel
+        var buttonPanel = new FlowLayoutPanel
         {
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             BackColor = Color.Transparent,
             Margin = Padding.Empty
         };
-        _selectFileButton.Margin = Padding.Empty;
-        _clearButton.Margin = new Padding(10, 0, 0, 0);
-        _importButton.Margin = new Padding(10, 0, 0, 0);
-        _viewImportedButton.Margin = new Padding(10, 0, 0, 0);
-        _viewPendingButton.Margin = new Padding(10, 0, 0, 0);
-        actionPanel.Controls.Add(_selectFileButton);
-        actionPanel.Controls.Add(_importButton);
-        actionPanel.Controls.Add(_viewImportedButton);
-        actionPanel.Controls.Add(_viewPendingButton);
-        actionPanel.Controls.Add(_clearButton);
+        buttonPanel.Controls.Add(_selectFileButton);
+        buttonPanel.Controls.Add(_importButton);
+        buttonPanel.Controls.Add(_viewImportedButton);
+        buttonPanel.Controls.Add(_viewPendingButton);
+        buttonPanel.Controls.Add(_clearButton);
 
         layout.Controls.Add(titlePanel, 0, 0);
-        layout.Controls.Add(actionPanel, 1, 0);
+        layout.Controls.Add(buttonPanel, 1, 0);
         shell.Controls.Add(layout);
         return shell;
-    }
-
-    private Control BuildSummaryArea()
-    {
-        var summaryArea = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 4,
-            RowCount = 1,
-            Margin = new Padding(0, 0, 0, 12)
-        };
-        summaryArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        for (var index = 0; index < 4; index++)
-        {
-            summaryArea.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-        }
-
-        summaryArea.Controls.Add(CreateMetricCard("当前文件", AccentBlue, out _fileValueLabel, out _fileNoteLabel), 0, 0);
-        summaryArea.Controls.Add(CreateMetricCard("有效记录", AccentGreen, out _rowCountValueLabel, out _rowCountNoteLabel), 1, 0);
-        summaryArea.Controls.Add(CreateMetricCard("风险记录", AccentOrange, out _pendingValueLabel, out _pendingNoteLabel), 2, 0);
-        summaryArea.Controls.Add(CreateMetricCard("当前状态", AccentBlue, out _importValueLabel, out _importNoteLabel), 3, 0);
-        return summaryArea;
     }
 
     private Control BuildWorkspaceArea()
@@ -208,113 +207,138 @@ internal sealed class DataInsightPageControl : UserControl
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
             ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty
+            RowCount = 2,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32F));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68F));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 54F));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 46F));
 
-        layout.Controls.Add(BuildGuidanceColumn(), 0, 0);
-        layout.Controls.Add(BuildPreviewColumn(), 1, 0);
+        layout.Controls.Add(PageChrome.CreateSectionShell(
+            "数据预览",
+            "导入前先看文件结构、行数和空值。",
+            out _previewSubtitleLabel,
+            _previewGrid,
+            new Padding(0, 0, 12, 12)), 0, 0);
+        layout.Controls.Add(BuildValidationPanel(), 1, 0);
+        layout.Controls.Add(BuildStatusPanel(), 0, 1);
+        layout.Controls.Add(BuildNextStepPanel(), 1, 1);
         return layout;
     }
 
-    private Control BuildGuidanceColumn()
+    private Control BuildValidationPanel()
     {
-        var column = new TableLayoutPanel
+        return PageChrome.CreateSectionShell(
+            "校验结果",
+            "先看阻断问题和提醒，再决定要不要导入。",
+            out _validationSubtitleLabel,
+            CreateTextBlockShell(_validationBlock),
+            new Padding(0, 0, 0, 12));
+    }
+
+    private Control BuildStatusPanel()
+    {
+        var statusLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 4,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        column.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        column.RowStyles.Add(new RowStyle(SizeType.Absolute, 198F));
-        column.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        column.Controls.Add(BuildWorkflowArea(), 0, 0);
-        column.Controls.Add(CreateSectionShell("问题清单", "有错误先修正，没错误再导入。", out _issuesSubtitleLabel, _issuesTextBox, new Padding(0, 12, 12, 0)), 0, 1);
-        return column;
+        statusLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        statusLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+        statusLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+        statusLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+        statusLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
+
+        statusLayout.Controls.Add(CreateStatusRow("当前文件", AccentBlue, out _statusFileValueLabel, out _statusFileNoteLabel, new Padding(0, 0, 0, 8)), 0, 0);
+        statusLayout.Controls.Add(CreateStatusRow("有效记录", AccentGreen, out _statusValidValueLabel, out _statusValidNoteLabel, new Padding(0, 0, 0, 8)), 0, 1);
+        statusLayout.Controls.Add(CreateStatusRow("风险记录", AccentOrange, out _statusRiskValueLabel, out _statusRiskNoteLabel, new Padding(0, 0, 0, 8)), 0, 2);
+        statusLayout.Controls.Add(CreateStatusRow("当前状态", AccentRed, out _statusStateValueLabel, out _statusStateNoteLabel, Padding.Empty), 0, 3);
+
+        return PageChrome.CreateSectionShell(
+            "导入状态",
+            "把当前文件、校验结果和导入状态收成四条就够了。",
+            out _statusSubtitleLabel,
+            statusLayout,
+            new Padding(0, 0, 12, 0));
     }
 
-    private Control BuildWorkflowArea()
+    private Control BuildNextStepPanel()
     {
-        var content = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 6,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-        _workflowValueLabel = CreateTextLabel("步骤 1 · 选择文件", 14F, FontStyle.Bold, TextPrimaryColor, new Padding(0, 0, 0, 8));
-        _workflowNoteLabel = CreateTextLabel("先选择符合模板的 CSV 文件。", 9F, FontStyle.Regular, TextSecondaryColor, new Padding(0, 0, 0, 12));
-
-        content.Controls.Add(_workflowValueLabel, 0, 0);
-        content.Controls.Add(_workflowNoteLabel, 0, 1);
-        content.Controls.Add(CreateTextLabel("1. 选择 CSV 文件，先看结构和行数。", 8.8F, FontStyle.Regular, TextSecondaryColor, new Padding(0, 0, 0, 6)), 0, 2);
-        content.Controls.Add(CreateTextLabel("2. 有错误先改文件；没错误再点“确认导入”。", 8.8F, FontStyle.Regular, TextSecondaryColor, new Padding(0, 0, 0, 6)), 0, 3);
-        content.Controls.Add(CreateTextLabel("3. 导入完成后去“本批记录”或“待闭环”继续处理。", 8.8F, FontStyle.Regular, TextSecondaryColor, new Padding(0, 0, 0, 12)), 0, 4);
-        content.Controls.Add(CreateHintPanel(), 0, 5);
-
-        return CreateSectionShell("导入流程", "只做导入，不在这里叠别的功能。", out _workflowSubtitleLabel, content, new Padding(0, 0, 12, 0));
+        return PageChrome.CreateSectionShell(
+            "下一步",
+            "这里只告诉你接下来该点什么，不堆别的功能。",
+            out _nextStepSubtitleLabel,
+            CreateTextBlockShell(_nextStepBlock),
+            Padding.Empty);
     }
 
-    private Control BuildPreviewColumn()
+    private static Control CreateTextBlockShell(PageChrome.ReadOnlyTextBlock block)
     {
-        var column = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 2,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        column.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        column.RowStyles.Add(new RowStyle(SizeType.Percent, 62F));
-        column.RowStyles.Add(new RowStyle(SizeType.Percent, 38F));
-        column.Controls.Add(CreateSectionShell("数据预览", "先确认结构、行数和风险记录。", out _previewSubtitleLabel, _previewGrid, Padding.Empty), 0, 0);
-        column.Controls.Add(CreateSectionShell("结果说明", "只告诉你当前能不能导入，以及导入后该去哪。", out _analysisSubtitleLabel, _analysisTextBox, new Padding(0, 12, 0, 0)), 0, 1);
-        return column;
+        var shell = PageChrome.CreateSurfacePanel(
+            new Padding(14),
+            14,
+            fillColor: InputBackground,
+            borderColor: Color.FromArgb(70, SurfaceBorder));
+        shell.Margin = Padding.Empty;
+        block.Padding = new Padding(0);
+        shell.Controls.Add(block);
+        return shell;
     }
 
-    private Control CreateHintPanel()
+    private static PageChrome.ChromePanel CreateStatusRow(string title, Color accent, out Label valueLabel, out Label noteLabel, Padding margin)
     {
-        var panel = new SurfacePanel(14)
+        var shell = PageChrome.CreateSurfacePanel(
+            new Padding(12, 8, 12, 8),
+            14,
+            fillColor: InputBackground,
+            borderColor: Color.FromArgb(70, SurfaceBorder));
+        shell.Margin = margin;
+
+        var marker = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 110,
-            Padding = new Padding(14, 12, 14, 12),
-            FillColor = Color.FromArgb(18, AccentBlue),
-            BorderColor = Color.FromArgb(64, AccentBlue)
+            Size = new Size(8, 8),
+            BackColor = accent,
+            Margin = new Padding(0, 7, 10, 0)
         };
 
-        var body = new TableLayoutPanel
+        var titleLabel = PageChrome.CreateNoteLabel(title, 8.8F, TextMutedColor);
+        valueLabel = PageChrome.CreateValueLabel(12.5F, "--");
+        noteLabel = PageChrome.CreateNoteLabel();
+        noteLabel.AutoSize = false;
+        noteLabel.Dock = DockStyle.Top;
+        noteLabel.Height = 18;
+        noteLabel.TextAlign = ContentAlignment.MiddleLeft;
+
+        var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 2
+            ColumnCount = 3,
+            RowCount = 2,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        body.Controls.Add(CreateTextLabel("导入成功后不会停在这一页。", 9F, FontStyle.Bold, TextPrimaryColor, new Padding(0, 0, 0, 6)), 0, 0);
-        body.Controls.Add(CreateTextLabel("系统会写入巡检记录；有预警和异常时，下一步直接去待闭环处理。", 8.8F, FontStyle.Regular, TextSecondaryColor, Padding.Empty), 0, 1);
-        panel.Controls.Add(body);
-        return panel;
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.Controls.Add(marker, 0, 0);
+        layout.SetRowSpan(marker, 2);
+        layout.Controls.Add(titleLabel, 1, 0);
+        layout.Controls.Add(valueLabel, 2, 0);
+        layout.Controls.Add(noteLabel, 1, 1);
+        layout.SetColumnSpan(noteLabel, 2);
+
+        shell.Controls.Add(layout);
+        return shell;
     }
 
     private void ChooseCsvFile()
@@ -347,32 +371,9 @@ internal sealed class DataInsightPageControl : UserControl
         _currentFilePath = filePath;
         _currentPreview = ParseCsv(filePath);
         _lastImportResult = null;
-
         _previewGrid.DataSource = _currentPreview.PreviewTable;
-        _fileValueLabel.Text = _currentPreview.FileName;
-        _fileNoteLabel.Text = _currentPreview.CanImport
-            ? "模板校验通过，可导入系统"
-            : "模板未通过，先修正数据";
-        _rowCountValueLabel.Text = _currentPreview.ValidEntryCount.ToString();
-        _rowCountNoteLabel.Text = $"原始 {_currentPreview.RowCount} 行 / {_currentPreview.ColumnCount} 列";
-        _pendingValueLabel.Text = (_currentPreview.WarningCount + _currentPreview.AbnormalCount).ToString();
-        _pendingNoteLabel.Text = $"正常 {_currentPreview.NormalCount} / 预警 {_currentPreview.WarningCount} / 异常 {_currentPreview.AbnormalCount}";
-        _importValueLabel.Text = _currentPreview.CanImport ? "待导入" : "不可导入";
-        _importNoteLabel.Text = _currentPreview.CanImport
-            ? "下一步可以直接确认导入"
-            : "先处理问题清单里的错误";
-        _previewSubtitleLabel.Text = _currentPreview.RowCount == 0
-            ? "文件只有表头，还没有数据行。"
-            : $"显示前 {_currentPreview.DisplayedRowCount} 行，空值 {_currentPreview.MissingValueCount} 个。";
-        _analysisSubtitleLabel.Text = _currentPreview.CanImport
-            ? "校验通过，下一步点“确认导入”。"
-            : "当前文件还不能直接导入。";
-        _analysisTextBox.Text = BuildPreviewAnalysis(_currentPreview);
         _generatedAtLabel.Text = $"最近加载：{DateTime.Now:yyyy-MM-dd HH:mm:ss}";
-
-        UpdateWorkflowState();
-        UpdateIssueSummary();
-        UpdateActionState();
+        RefreshDisplayState();
     }
 
     private void ImportCurrentPreview()
@@ -385,15 +386,9 @@ internal sealed class DataInsightPageControl : UserControl
         try
         {
             _lastImportResult = _controller.Import(_currentPreview.Entries, _currentFilePath);
-            _importValueLabel.Text = "已导入";
-            _importNoteLabel.Text = $"批次 {_lastImportResult.BatchKeyword}";
-            _analysisSubtitleLabel.Text = "导入完成，下一步去巡检页继续处理。";
-            _analysisTextBox.Text = BuildImportAnalysis(_lastImportResult, _currentPreview);
             _generatedAtLabel.Text = $"最近导入：{_lastImportResult.ImportedAt:yyyy-MM-dd HH:mm:ss}";
             DataChanged?.Invoke(this, EventArgs.Empty);
-            UpdateWorkflowState();
-            UpdateIssueSummary();
-            UpdateActionState();
+            RefreshDisplayState();
         }
         catch (Exception ex)
         {
@@ -408,78 +403,131 @@ internal sealed class DataInsightPageControl : UserControl
         _currentFilePath = null;
         _previewGrid.DataSource = null;
         _previewGrid.Columns.Clear();
-        _fileValueLabel.Text = "--";
-        _fileNoteLabel.Text = "还没有加载文件";
-        _rowCountValueLabel.Text = "0";
-        _rowCountNoteLabel.Text = "导入后显示有效记录数";
-        _pendingValueLabel.Text = "0";
-        _pendingNoteLabel.Text = "导入后显示预警和异常";
-        _importValueLabel.Text = "未开始";
-        _importNoteLabel.Text = "先选文件并校验模板";
-        _previewSubtitleLabel.Text = "导入前先预览数据。";
-        _analysisSubtitleLabel.Text = "先选择文件，再决定是否导入。";
-        _analysisTextBox.Text =
-            "这个页只做导入：\r\n" +
-            "1. 先选 CSV 文件。\r\n" +
-            "2. 看预览和问题清单。\r\n" +
-            "3. 导入完成后去巡检页看本批记录或待闭环。";
         _generatedAtLabel.Text = "还没有选择导入文件";
-        UpdateWorkflowState();
-        UpdateIssueSummary();
+        RefreshDisplayState();
+    }
+
+    private void RefreshDisplayState()
+    {
+        UpdateActionBar();
+        UpdatePreviewSubtitle();
+        UpdateStatusSummary();
+        UpdateValidationSummary();
+        UpdateNextStepSummary();
         UpdateActionState();
     }
 
-    private void UpdateActionState()
-    {
-        _importButton.Enabled = _currentPreview?.CanImport == true;
-        _importButton.Visible = _lastImportResult is null;
-        _viewImportedButton.Enabled = _lastImportResult is not null;
-        _viewImportedButton.Visible = _lastImportResult is not null;
-        _viewPendingButton.Enabled = (_lastImportResult?.PendingCount ?? 0) > 0;
-        _viewPendingButton.Visible = (_lastImportResult?.PendingCount ?? 0) > 0;
-        _clearButton.Visible = _currentPreview is not null || _lastImportResult is not null;
-    }
-
-    private void UpdateWorkflowState()
+    private void UpdateActionBar()
     {
         if (_lastImportResult is not null)
         {
-            _workflowSubtitleLabel.Text = "第 3 步：导入完成后去后续页面处理。";
-            _workflowValueLabel.Text = "步骤 3 · 去巡检页继续处理";
-            _workflowNoteLabel.Text = _lastImportResult.PendingCount > 0
-                ? "这批数据里有待闭环项，下一步直接点“查看待闭环”。"
-                : "这批数据已入库，下一步点“查看本批记录”。";
+            _actionFileValueLabel.Text = _lastImportResult.SourceFileName;
+            _actionStatusValueLabel.Text = _lastImportResult.PendingCount > 0
+                ? $"已导入，当前还有 {_lastImportResult.PendingCount} 条待闭环。"
+                : $"已导入完成，批次 {_lastImportResult.BatchKeyword}。";
             return;
         }
 
-        if (_currentPreview is null)
+        if (_currentPreview is not null)
         {
-            _workflowSubtitleLabel.Text = "第 1 步：先选择要导入的文件。";
-            _workflowValueLabel.Text = "步骤 1 · 选择文件";
-            _workflowNoteLabel.Text = "这个页不做分析，只负责把 CSV 导进系统。";
+            _actionFileValueLabel.Text = _currentPreview.FileName;
+            _actionStatusValueLabel.Text = _currentPreview.CanImport
+                ? "校验通过，可以直接确认导入。"
+                : $"校验未通过，当前有 {_currentPreview.ValidationErrors.Count} 个阻断问题。";
             return;
         }
 
-        if (_currentPreview.CanImport)
-        {
-            _workflowSubtitleLabel.Text = "第 2 步：校验通过，可以导入。";
-            _workflowValueLabel.Text = "步骤 2 · 确认导入";
-            _workflowNoteLabel.Text = "预览没问题就点“确认导入”，不要在这里停留太久。";
-            return;
-        }
-
-        _workflowSubtitleLabel.Text = "第 2 步：先修正问题，再导入。";
-        _workflowValueLabel.Text = "步骤 2 · 修正文件";
-        _workflowNoteLabel.Text = "当前文件有阻断问题，先按问题清单修正 CSV。";
+        _actionFileValueLabel.Text = "还没有加载文件";
+        _actionStatusValueLabel.Text = "先选 CSV，再看校验结果。";
     }
 
-    private void UpdateIssueSummary()
+    private void UpdatePreviewSubtitle()
     {
         if (_currentPreview is null)
         {
-            _issuesSubtitleLabel.Text = "先准备模板，再选择文件。";
-            _issuesTextBox.Text =
-                "固定模板要求：\r\n" +
+            _previewSubtitleLabel.Text = "导入前先预览数据。";
+            return;
+        }
+
+        if (_currentPreview.RowCount == 0)
+        {
+            _previewSubtitleLabel.Text = "文件只有表头，还没有数据行。";
+            return;
+        }
+
+        _previewSubtitleLabel.Text = _lastImportResult is not null
+            ? $"已导入，预览显示前 {_currentPreview.DisplayedRowCount} 行。"
+            : $"显示前 {_currentPreview.DisplayedRowCount} 行，空值 {_currentPreview.MissingValueCount} 个。";
+    }
+
+    private void UpdateStatusSummary()
+    {
+        if (_lastImportResult is not null)
+        {
+            _statusSubtitleLabel.Text = _lastImportResult.PendingCount > 0
+                ? $"导入完成，本批次还有 {_lastImportResult.PendingCount} 条待闭环。"
+                : "导入完成，这批数据没有新增待闭环。";
+
+            _statusFileValueLabel.Text = _lastImportResult.SourceFileName;
+            _statusFileNoteLabel.Text = $"批次 {_lastImportResult.BatchKeyword}";
+
+            _statusValidValueLabel.Text = _lastImportResult.ImportedCount.ToString();
+            _statusValidNoteLabel.Text = $"模板新增 {_lastImportResult.TemplateCreatedCount} / 更新 {_lastImportResult.TemplateUpdatedCount}";
+
+            var riskCount = _lastImportResult.WarningCount + _lastImportResult.AbnormalCount;
+            _statusRiskValueLabel.Text = riskCount.ToString();
+            _statusRiskNoteLabel.Text = $"预警 {_lastImportResult.WarningCount} / 异常 {_lastImportResult.AbnormalCount}";
+
+            _statusStateValueLabel.Text = "已导入";
+            _statusStateNoteLabel.Text = _lastImportResult.PendingCount > 0
+                ? "下一步建议查看待闭环。"
+                : "下一步建议查看本批记录。";
+            return;
+        }
+
+        if (_currentPreview is not null)
+        {
+            _statusSubtitleLabel.Text = _currentPreview.CanImport
+                ? "校验通过，可以直接导入。"
+                : $"当前文件还有 {_currentPreview.ValidationErrors.Count} 个阻断问题。";
+
+            _statusFileValueLabel.Text = _currentPreview.FileName;
+            _statusFileNoteLabel.Text = $"原始 {_currentPreview.RowCount} 行 / {_currentPreview.ColumnCount} 列";
+
+            _statusValidValueLabel.Text = _currentPreview.ValidEntryCount.ToString();
+            _statusValidNoteLabel.Text = _currentPreview.CanImport
+                ? "模板校验通过，可写入系统。"
+                : "有错误的行不会进入导入列表。";
+
+            var riskCount = _currentPreview.WarningCount + _currentPreview.AbnormalCount;
+            _statusRiskValueLabel.Text = riskCount.ToString();
+            _statusRiskNoteLabel.Text = $"正常 {_currentPreview.NormalCount} / 预警 {_currentPreview.WarningCount} / 异常 {_currentPreview.AbnormalCount}";
+
+            _statusStateValueLabel.Text = _currentPreview.CanImport ? "待导入" : "不可导入";
+            _statusStateNoteLabel.Text = _currentPreview.CanImport
+                ? "下一步点“确认导入”。"
+                : "先修正右上的阻断问题。";
+            return;
+        }
+
+        _statusSubtitleLabel.Text = "还没有文件。";
+        _statusFileValueLabel.Text = "--";
+        _statusFileNoteLabel.Text = "先点上面的“选择 CSV 文件”。";
+        _statusValidValueLabel.Text = "0";
+        _statusValidNoteLabel.Text = "导入后显示有效记录数。";
+        _statusRiskValueLabel.Text = "0";
+        _statusRiskNoteLabel.Text = "导入后显示预警和异常。";
+        _statusStateValueLabel.Text = "未开始";
+        _statusStateNoteLabel.Text = "先选文件，再决定是否导入。";
+    }
+
+    private void UpdateValidationSummary()
+    {
+        if (_currentPreview is null)
+        {
+            _validationSubtitleLabel.Text = "先选文件，右边会显示校验结果。";
+            _validationBlock.Text =
+                "固定模板要求：\r\n\r\n" +
                 "1. 必填列：产线、设备名称、点检项目、状态、点检时间。\r\n" +
                 "2. 可选列：点检人、测量值、备注。\r\n" +
                 "3. 状态只支持：正常 / 预警 / 异常。";
@@ -488,24 +536,24 @@ internal sealed class DataInsightPageControl : UserControl
 
         if (_lastImportResult is not null)
         {
-            _issuesSubtitleLabel.Text = _lastImportResult.PendingCount > 0
-                ? $"导入完成，本批次还有 {_lastImportResult.PendingCount} 条待闭环。"
+            _validationSubtitleLabel.Text = _lastImportResult.PendingCount > 0
+                ? $"导入完成，本批次仍有 {_lastImportResult.PendingCount} 条待闭环。"
                 : "导入完成，这批数据没有新增待闭环。";
-            _issuesTextBox.Text =
+            _validationBlock.Text =
                 $"批次：{_lastImportResult.BatchKeyword}\r\n" +
                 $"来源文件：{_lastImportResult.SourceFileName}\r\n" +
                 $"导入记录：{_lastImportResult.ImportedCount} 条\r\n" +
                 $"状态分布：正常 {_lastImportResult.NormalCount} / 预警 {_lastImportResult.WarningCount} / 异常 {_lastImportResult.AbnormalCount}\r\n" +
                 (_lastImportResult.PendingCount > 0
-                    ? "下一步建议：直接点“查看待闭环”。"
-                    : "下一步建议：点“查看本批记录”。");
+                    ? "校验结果已经通过，后续重点转到待闭环。"
+                    : "校验结果已经通过，后续可以回巡检页看本批记录。");
             return;
         }
 
         var lines = new List<string>();
         if (_currentPreview.ValidationErrors.Count > 0)
         {
-            _issuesSubtitleLabel.Text = $"有 {_currentPreview.ValidationErrors.Count} 个阻断问题，先修正。";
+            _validationSubtitleLabel.Text = $"有 {_currentPreview.ValidationErrors.Count} 个阻断问题，先修正。";
             lines.Add("阻断问题：");
             foreach (var error in _currentPreview.ValidationErrors)
             {
@@ -514,9 +562,9 @@ internal sealed class DataInsightPageControl : UserControl
         }
         else
         {
-            _issuesSubtitleLabel.Text = _currentPreview.Warnings.Count > 0
+            _validationSubtitleLabel.Text = _currentPreview.Warnings.Count > 0
                 ? $"没有阻断问题，另有 {_currentPreview.Warnings.Count} 条提醒。"
-                : "没有阻断问题，可以直接导入。";
+                : "校验通过，可以直接导入。";
             lines.Add("阻断问题：无");
         }
 
@@ -534,7 +582,46 @@ internal sealed class DataInsightPageControl : UserControl
             }
         }
 
-        _issuesTextBox.Text = string.Join(Environment.NewLine, lines);
+        _validationBlock.Text = string.Join(Environment.NewLine, lines);
+    }
+
+    private void UpdateNextStepSummary()
+    {
+        if (_lastImportResult is not null && _currentPreview is not null)
+        {
+            _nextStepSubtitleLabel.Text = _lastImportResult.PendingCount > 0
+                ? "导入完成，下一步先去处理待闭环。"
+                : "导入完成，下一步去巡检页看本批记录。";
+            _nextStepBlock.Text = BuildImportAnalysis(_lastImportResult, _currentPreview);
+            return;
+        }
+
+        if (_currentPreview is null)
+        {
+            _nextStepSubtitleLabel.Text = "先选文件，再决定是否导入。";
+            _nextStepBlock.Text =
+                "这个页只做导入：\r\n\r\n" +
+                "1. 先选 CSV 文件。\r\n" +
+                "2. 看预览和校验结果。\r\n" +
+                "3. 通过后确认导入，导入完成再回巡检页继续处理。";
+            return;
+        }
+
+        _nextStepSubtitleLabel.Text = _currentPreview.CanImport
+            ? "校验通过，下一步点“确认导入”。"
+            : "当前文件还不能直接导入。";
+        _nextStepBlock.Text = BuildPreviewAnalysis(_currentPreview);
+    }
+
+    private void UpdateActionState()
+    {
+        _importButton.Enabled = _currentPreview?.CanImport == true;
+        _importButton.Visible = _lastImportResult is null;
+        _viewImportedButton.Enabled = _lastImportResult is not null;
+        _viewImportedButton.Visible = _lastImportResult is not null;
+        _viewPendingButton.Enabled = (_lastImportResult?.PendingCount ?? 0) > 0;
+        _viewPendingButton.Visible = (_lastImportResult?.PendingCount ?? 0) > 0;
+        _clearButton.Visible = _currentPreview is not null || _lastImportResult is not null;
     }
 
     private string BuildPreviewAnalysis(CsvPreviewState preview)
@@ -546,7 +633,7 @@ internal sealed class DataInsightPageControl : UserControl
         }
         else
         {
-            lines.Add("当前文件还不能导入。先按左侧问题清单修正 CSV。");
+            lines.Add("当前文件还不能导入。先按右上角校验结果修正 CSV。");
         }
 
         lines.Add($"有效记录 {preview.ValidEntryCount} 条，预警 {preview.WarningCount} 条，异常 {preview.AbnormalCount} 条。");
@@ -909,125 +996,9 @@ internal sealed class DataInsightPageControl : UserControl
         };
     }
 
-    private Panel CreateSectionShell(string title, string subtitle, out Label subtitleLabel, Control content, Padding margin)
-    {
-        var shell = CreateSurfacePanel(new Padding(18, 14, 18, 18));
-        shell.Margin = margin;
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 3
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-        layout.Controls.Add(CreateTextLabel(title, 11F, FontStyle.Bold, TextPrimaryColor, new Padding(0, 0, 0, 4)), 0, 0);
-        subtitleLabel = CreateTextLabel(subtitle, 8.8F, FontStyle.Regular, TextMutedColor, new Padding(0, 0, 0, 12));
-        content.Dock = DockStyle.Fill;
-
-        layout.Controls.Add(subtitleLabel, 0, 1);
-        layout.Controls.Add(content, 0, 2);
-        shell.Controls.Add(layout);
-        return shell;
-    }
-
-    private Panel CreateMetricCard(string title, Color accent, out Label valueLabel, out Label noteLabel)
-    {
-        var card = CreateSurfacePanel(new Padding(18, 16, 18, 14));
-        card.Margin = new Padding(0, 0, 12, 0);
-
-        var accentBar = new Panel
-        {
-            Dock = DockStyle.Left,
-            Width = 4,
-            BackColor = accent
-        };
-
-        var body = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 3,
-            Padding = new Padding(12, 0, 0, 0)
-        };
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        body.Controls.Add(CreateTextLabel(title, 9F, FontStyle.Regular, TextMutedColor, new Padding(0, 0, 0, 8)), 0, 0);
-        valueLabel = new Label
-        {
-            AutoEllipsis = true,
-            Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 16F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            Margin = Padding.Empty,
-            Text = "--"
-        };
-        noteLabel = CreateTextLabel(string.Empty, 8.5F, FontStyle.Regular, TextSecondaryColor, new Padding(0, 8, 0, 0));
-        noteLabel.Dock = DockStyle.Bottom;
-
-        body.Controls.Add(valueLabel, 0, 1);
-        body.Controls.Add(noteLabel, 0, 2);
-        card.Controls.Add(body);
-        card.Controls.Add(accentBar);
-        return card;
-    }
-
-    private static Label CreateInfoLabel()
-    {
-        return new Label
-        {
-            AutoSize = true,
-            Font = new Font("Microsoft YaHei UI", 8.8F),
-            ForeColor = TextMutedColor
-        };
-    }
-
-    private static Label CreateTextLabel(string text, float size, FontStyle style, Color color, Padding margin)
-    {
-        return new Label
-        {
-            AutoSize = true,
-            Dock = DockStyle.Top,
-            Font = new Font("Microsoft YaHei UI", size, style),
-            ForeColor = color,
-            Margin = margin,
-            Text = text
-        };
-    }
-
-    private static Button CreateActionButton(string text, Color accent)
-    {
-        var button = new Button
-        {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-            ForeColor = TextPrimaryColor,
-            BackColor = HeaderBackground,
-            Padding = new Padding(14, 8, 14, 8),
-            Text = text
-        };
-        button.FlatAppearance.BorderSize = 1;
-        button.FlatAppearance.BorderColor = Color.FromArgb(88, accent);
-        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(36, accent);
-        button.FlatAppearance.MouseDownBackColor = Color.FromArgb(58, accent);
-        return button;
-    }
-
     private static DataGridView CreatePreviewGrid()
     {
-        return new DataGridView
+        var grid = new BufferedDataGridView
         {
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -1044,97 +1015,21 @@ internal sealed class DataInsightPageControl : UserControl
             RowHeadersVisible = false,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect
         };
+        PageChrome.ApplyGridTheme(grid);
+        return grid;
     }
 
-    private static TextBox CreateAnalysisTextBox()
+    private sealed class BufferedDataGridView : DataGridView
     {
-        return new TextBox
+        public BufferedDataGridView()
         {
-            BorderStyle = BorderStyle.None,
-            Dock = DockStyle.Fill,
-            Multiline = true,
-            ReadOnly = true,
-            ScrollBars = ScrollBars.Vertical,
-            BackColor = SurfaceBackground,
-            ForeColor = TextSecondaryColor,
-            Font = new Font("Microsoft YaHei UI", 9F)
-        };
-    }
-
-    private static void ApplyGridTheme(DataGridView grid)
-    {
-        grid.BackgroundColor = SurfaceBackground;
-        grid.GridColor = Color.FromArgb(54, 60, 78);
-        grid.DefaultCellStyle.BackColor = SurfaceBackground;
-        grid.DefaultCellStyle.ForeColor = TextSecondaryColor;
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(48, AccentBlue);
-        grid.DefaultCellStyle.SelectionForeColor = TextPrimaryColor;
-        grid.DefaultCellStyle.Padding = new Padding(6, 0, 6, 0);
-        grid.DefaultCellStyle.Font = new Font("Microsoft YaHei UI", 9F);
-        grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(24, 26, 36);
-        grid.AlternatingRowsDefaultCellStyle.ForeColor = TextSecondaryColor;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = HeaderBackground;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimaryColor;
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = HeaderBackground;
-        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextPrimaryColor;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-        grid.RowTemplate.Height = 34;
-    }
-
-    private static SurfacePanel CreateSurfacePanel(Padding padding)
-    {
-        return new SurfacePanel(16)
-        {
-            Dock = DockStyle.Fill,
-            Padding = padding,
-            FillColor = SurfaceBackground,
-            BorderColor = SurfaceBorder
-        };
-    }
-
-    private sealed class SurfacePanel : Panel
-    {
-        private readonly int _radius;
-
-        public SurfacePanel(int radius)
-        {
-            _radius = radius;
-            SetStyle(
-                ControlStyles.UserPaint |
-                ControlStyles.AllPaintingInWmPaint |
-                ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.ResizeRedraw,
-                true);
             DoubleBuffered = true;
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer,
+                true);
             UpdateStyles();
-            BackColor = Color.Transparent;
         }
-
-        public Color FillColor { get; init; }
-
-        public Color BorderColor { get; init; }
-
-        protected override void OnPaintBackground(PaintEventArgs e)
-        {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var path = CreateRoundedPath(new Rectangle(0, 0, Width - 1, Height - 1), _radius);
-            using var fillBrush = new SolidBrush(FillColor);
-            using var borderPen = new Pen(BorderColor, 1f);
-            e.Graphics.FillPath(fillBrush, path);
-            e.Graphics.DrawPath(borderPen, path);
-        }
-    }
-
-    private static GraphicsPath CreateRoundedPath(Rectangle rect, int radius)
-    {
-        var path = new GraphicsPath();
-        var diameter = radius * 2;
-        path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90);
-        path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90);
-        path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90);
-        path.AddArc(rect.X, rect.Bottom - diameter, diameter, diameter, 90, 90);
-        path.CloseFigure();
-        return path;
     }
 
     private enum ImportColumn

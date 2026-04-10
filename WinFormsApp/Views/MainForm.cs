@@ -148,6 +148,55 @@ namespace WinFormsApp.Views
             Color.FromArgb(160, 170, 190),
             Color.FromArgb(80, 85, 110),
             Color.FromArgb(204, 10, 10, 15));
+        private static readonly Font[] HeaderTitleFonts =
+        {
+            new Font("Microsoft YaHei UI", 24F, FontStyle.Bold),
+            new Font("Microsoft YaHei UI", 22F, FontStyle.Bold),
+            new Font("Microsoft YaHei UI", 20F, FontStyle.Bold)
+        };
+        private static readonly Font[] HeaderSubtitleFonts =
+        {
+            new Font("Microsoft YaHei UI", 11F, FontStyle.Regular),
+            new Font("Microsoft YaHei UI", 10F, FontStyle.Regular),
+            new Font("Microsoft YaHei UI", 9F, FontStyle.Regular)
+        };
+        private static readonly Font[] CardValueFonts =
+        {
+            new Font("Segoe UI", 22F, FontStyle.Bold),
+            new Font("Segoe UI", 20F, FontStyle.Bold),
+            new Font("Segoe UI", 18F, FontStyle.Bold)
+        };
+        private static readonly Font[] CardLabelFonts =
+        {
+            new Font("Microsoft YaHei UI", 9.5F, FontStyle.Regular),
+            new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            new Font("Microsoft YaHei UI", 8.5F, FontStyle.Regular)
+        };
+        private static readonly Font[] CardDetailFonts =
+        {
+            new Font("Microsoft YaHei UI", 8.5F, FontStyle.Regular),
+            new Font("Microsoft YaHei UI", 8.2F, FontStyle.Regular),
+            new Font("Microsoft YaHei UI", 8F, FontStyle.Regular)
+        };
+        private static readonly Font[] ActivityFonts =
+        {
+            new Font("Segoe UI", 10F, FontStyle.Regular),
+            new Font("Segoe UI", 9.5F, FontStyle.Regular),
+            new Font("Segoe UI", 9F, FontStyle.Regular)
+        };
+        private static readonly Font[] QuickActionFonts =
+        {
+            new Font("Segoe UI", 11F, FontStyle.Bold),
+            new Font("Segoe UI", 10.5F, FontStyle.Bold),
+            new Font("Segoe UI", 10F, FontStyle.Bold)
+        };
+        private static readonly Font PanelTitleFont = new("Segoe UI", 14F, FontStyle.Bold);
+        private static readonly Font StatusBadgeFont = new("Segoe UI", 8.5F, FontStyle.Bold);
+        private static readonly Font ActivityTimeFont = new("Segoe UI", 9F, FontStyle.Regular);
+        private static readonly Font ArrowFont = new("Segoe UI", 11F, FontStyle.Regular);
+        private static readonly StringFormat CenteredSingleLineTextFormat = CreateSingleLineTextFormat(StringAlignment.Center);
+        private static readonly StringFormat TopAlignedSingleLineTextFormat = CreateSingleLineTextFormat(StringAlignment.Near);
+        private static readonly StringFormat WrappedTextFormat = CreateWrappedTextFormat();
 
         // ==================== 动画相关 ====================
         private System.Windows.Forms.Timer _animTimer = null!;
@@ -161,6 +210,9 @@ namespace WinFormsApp.Views
         private Panel _sidebar = null!;
         private Panel _mainArea = null!;
         private Panel _homeView = null!;
+        private Panel _homeHeader = null!;
+        private Panel _homeCardsArea = null!;
+        private Panel _homeBottomArea = null!;
         private BufferedPanel _avatarButton = null!;
         private BufferedPanel _themeToggleButton = null!;
         private readonly List<DashboardHitRegion> _cardHitRegions = new();
@@ -522,6 +574,8 @@ namespace WinFormsApp.Views
                 _animTimer.Stop();
             }
 
+            SuspendWindowEffects();
+
             if (_inspectionPage.Visible)
             {
                 _inspectionPage.BeginInteractiveResize();
@@ -541,6 +595,8 @@ namespace WinFormsApp.Views
                 _inspectionPage.EndInteractiveResize();
             }
 
+            ResumeWindowEffects();
+            InvalidateHomeSections();
             Invalidate(true);
         }
 
@@ -564,19 +620,8 @@ namespace WinFormsApp.Views
             _mainArea = mainArea;
 
             mainArea.SuspendLayout();
-            var homeView = new BufferedPanel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.Transparent
-            };
+            var homeView = BuildHomeView();
             _homeView = homeView;
-
-            var bottomPanel = CreateBottomArea();
-            var cardsPanel = CreateCardsArea();
-            var headerPanel = CreateHeader();
-            homeView.Controls.Add(bottomPanel);
-            homeView.Controls.Add(cardsPanel);
-            homeView.Controls.Add(headerPanel);
 
             _monitorPage.Dock = DockStyle.Fill;
             _alarmPage.Dock = DockStyle.Fill;
@@ -596,6 +641,303 @@ namespace WinFormsApp.Views
             this.Controls.Add(sidebar);
             mainArea.ResumeLayout(false);
             ResumeLayout(false);
+        }
+
+        private Panel BuildHomeView()
+        {
+            var homeView = new BufferedPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent
+            };
+
+            var bottomArea = CreateBottomArea();
+            var cardsArea = CreateCardsArea();
+            var header = CreateHeader();
+
+            homeView.Controls.Add(bottomArea);
+            homeView.Controls.Add(cardsArea);
+            homeView.Controls.Add(header);
+
+            _homeHeader = header;
+            _homeCardsArea = cardsArea;
+            _homeBottomArea = bottomArea;
+            return homeView;
+        }
+
+        private Control BuildHomeMetricsArea()
+        {
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                BackColor = Color.Transparent,
+                ColumnCount = Math.Max(1, _dashboard.Cards.Count),
+                RowCount = 1,
+                Margin = new Padding(0, 0, 0, 12),
+                Height = 168
+            };
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var cardCount = Math.Max(1, _dashboard.Cards.Count);
+            for (var index = 0; index < cardCount; index++)
+            {
+                layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / cardCount));
+            }
+
+            if (_dashboard.Cards.Count == 0)
+            {
+                var emptyPanel = PageChrome.CreateSurfacePanel(new Padding(20));
+                emptyPanel.Margin = Padding.Empty;
+                emptyPanel.Controls.Add(PageChrome.CreateEmptyStateLabel("当前没有统计卡片"));
+                layout.Controls.Add(emptyPanel, 0, 0);
+                return layout;
+            }
+
+            for (var index = 0; index < _dashboard.Cards.Count; index++)
+            {
+                layout.Controls.Add(CreateDashboardMetricCard(_dashboard.Cards[index], index == _dashboard.Cards.Count - 1), index, 0);
+            }
+
+            return layout;
+        }
+
+        private Control BuildHomeBottomArea()
+        {
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 62F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38F));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var activityList = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 1,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                AutoScroll = true
+            };
+            activityList.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            if (_dashboard.Activities.Count == 0)
+            {
+                activityList.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+                activityList.Controls.Add(PageChrome.CreateEmptyStateLabel("当前还没有最近活动。"), 0, 0);
+            }
+            else
+            {
+                for (var index = 0; index < _dashboard.Activities.Count; index++)
+                {
+                    activityList.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                    activityList.Controls.Add(CreateActivityRow(_dashboard.Activities[index], index == _dashboard.Activities.Count - 1), 0, index);
+                }
+            }
+
+            var actionList = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = Math.Max(1, _dashboard.QuickActions.Count),
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
+            actionList.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            if (_dashboard.QuickActions.Count == 0)
+            {
+                actionList.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+                actionList.Controls.Add(PageChrome.CreateEmptyStateLabel("当前没有快捷操作。"), 0, 0);
+            }
+            else
+            {
+                for (var index = 0; index < _dashboard.QuickActions.Count; index++)
+                {
+                    actionList.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                    actionList.Controls.Add(CreateQuickActionRow(_dashboard.QuickActions[index], index == _dashboard.QuickActions.Count - 1), 0, index);
+                }
+            }
+
+            layout.Controls.Add(PageChrome.CreateSectionShell("最近活动", "按时间倒序，保留最新的巡检动态。", out _, activityList, new Padding(0, 0, 12, 0)), 0, 0);
+            layout.Controls.Add(PageChrome.CreateSectionShell("快捷操作", "直接跳到最常用的处理动作。", out _, actionList), 1, 0);
+            return layout;
+        }
+
+        private Control CreateDashboardMetricCard(DashboardCardViewModel cardData, bool isLast)
+        {
+            var card = PageChrome.CreateSurfacePanel(new Padding(18, 16, 18, 18));
+            card.Margin = isLast ? Padding.Empty : new Padding(0, 0, 12, 0);
+            card.MinimumSize = new Size(0, 156);
+            card.Paint += (_, e) =>
+            {
+                using var accentPen = new Pen(cardData.AccentColor, 2F);
+                e.Graphics.DrawLine(accentPen, 18, 12, 64, 12);
+            };
+
+            var content = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 1,
+                RowCount = 4,
+                Margin = Padding.Empty,
+                Padding = new Padding(0, 10, 0, 0)
+            };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var badge = new Label
+            {
+                AutoSize = true,
+                BackColor = Color.FromArgb(36, cardData.AccentColor),
+                ForeColor = cardData.AccentColor,
+                Font = new Font("Microsoft YaHei UI", 8.6F, FontStyle.Bold),
+                Margin = new Padding(0, 0, 0, 12),
+                Padding = new Padding(10, 4, 10, 4),
+                Text = cardData.Icon
+            };
+
+            var valueLabel = new Label
+            {
+                AutoSize = false,
+                Dock = DockStyle.Top,
+                Font = new Font("Segoe UI", 22F, FontStyle.Bold),
+                ForeColor = PageChrome.TextPrimary,
+                Height = 40,
+                Margin = new Padding(0, 0, 0, 4),
+                Text = cardData.Value
+            };
+
+            var titleLabel = PageChrome.CreateTextLabel(cardData.Title, 9F, FontStyle.Bold, PageChrome.TextMuted, new Padding(0, 0, 0, 6));
+            var detailLabel = new Label
+            {
+                AutoEllipsis = true,
+                Dock = DockStyle.Fill,
+                Font = new Font("Microsoft YaHei UI", 8.8F),
+                ForeColor = cardData.AccentColor,
+                Margin = Padding.Empty,
+                Text = cardData.Detail
+            };
+
+            content.Controls.Add(badge, 0, 0);
+            content.Controls.Add(valueLabel, 0, 1);
+            content.Controls.Add(titleLabel, 0, 2);
+            content.Controls.Add(detailLabel, 0, 3);
+            card.Controls.Add(content);
+            BindDashboardNavigation(card, cardData.NavigationTarget);
+            return card;
+        }
+
+        private Control CreateActivityRow(DashboardActivityViewModel activity, bool isLast)
+        {
+            var row = PageChrome.CreateSurfacePanel(
+                new Padding(14, 12, 14, 12),
+                radius: 12,
+                fillColor: PageChrome.SurfaceRaised,
+                borderColor: Color.FromArgb(62, PageChrome.SurfaceBorder));
+            row.Margin = isLast ? Padding.Empty : new Padding(0, 0, 0, 10);
+
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                ColumnCount = 3,
+                RowCount = 1,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var statusLabel = new Label
+            {
+                AutoSize = true,
+                BackColor = Color.FromArgb(34, activity.AccentColor),
+                ForeColor = activity.AccentColor,
+                Font = new Font("Microsoft YaHei UI", 8.4F, FontStyle.Bold),
+                Margin = new Padding(0, 0, 12, 0),
+                Padding = new Padding(10, 4, 10, 4),
+                Text = activity.Status
+            };
+
+            var textLabel = new Label
+            {
+                AutoEllipsis = true,
+                Dock = DockStyle.Fill,
+                Font = new Font("Microsoft YaHei UI", 9.2F),
+                ForeColor = PageChrome.TextPrimary,
+                Margin = Padding.Empty,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Text = activity.Text
+            };
+
+            var timeLabel = new Label
+            {
+                AutoSize = true,
+                Dock = DockStyle.Right,
+                Font = new Font("Microsoft YaHei UI", 8.8F),
+                ForeColor = PageChrome.TextMuted,
+                Margin = new Padding(12, 0, 0, 0),
+                Text = activity.Time
+            };
+
+            layout.Controls.Add(statusLabel, 0, 0);
+            layout.Controls.Add(textLabel, 1, 0);
+            layout.Controls.Add(timeLabel, 2, 0);
+            row.Controls.Add(layout);
+            return row;
+        }
+
+        private Control CreateQuickActionRow(DashboardQuickActionViewModel action, bool isLast)
+        {
+            var button = PageChrome.CreateActionButton($"{action.Icon}  {action.Text}", action.PrimaryAccent, false);
+            button.Dock = DockStyle.Top;
+            button.AutoSize = false;
+            button.Height = 46;
+            button.Margin = isLast ? Padding.Empty : new Padding(0, 0, 0, 10);
+            button.TextAlign = ContentAlignment.MiddleLeft;
+            button.Padding = new Padding(14, 8, 14, 8);
+            if (action.NavigationTarget != DashboardNavigationTarget.None)
+            {
+                button.Click += (_, _) => NavigateTo(action.NavigationTarget);
+            }
+            else
+            {
+                button.Enabled = false;
+            }
+
+            return button;
+        }
+
+        private void BindDashboardNavigation(Control control, DashboardNavigationTarget target)
+        {
+            if (target == DashboardNavigationTarget.None)
+            {
+                return;
+            }
+
+            control.Cursor = Cursors.Hand;
+            control.Click += (_, _) => NavigateTo(target);
+            foreach (Control child in control.Controls)
+            {
+                BindDashboardNavigation(child, target);
+            }
         }
 
         private void ApplyTheme()
@@ -622,13 +964,28 @@ namespace WinFormsApp.Views
         private void ReloadDashboard()
         {
             _dashboard = _dashboardController.Load(_account);
-            _cardHitRegions.Clear();
-            _quickActionHitRegions.Clear();
+            if (_mainArea is null)
+            {
+                return;
+            }
 
+            var wasVisible = _homeView?.Visible ?? true;
+            var childIndex = _homeView is not null
+                ? _mainArea.Controls.GetChildIndex(_homeView)
+                : 0;
+
+            _mainArea.SuspendLayout();
             if (_homeView is not null)
             {
-                InvalidateControlTree(_homeView);
+                _mainArea.Controls.Remove(_homeView);
+                _homeView.Dispose();
             }
+
+            _homeView = BuildHomeView();
+            _homeView.Visible = wasVisible;
+            _mainArea.Controls.Add(_homeView);
+            _mainArea.Controls.SetChildIndex(_homeView, childIndex);
+            _mainArea.ResumeLayout();
         }
 
         private void OnInspectionDataChanged(object? sender, EventArgs e)
@@ -692,37 +1049,22 @@ namespace WinFormsApp.Views
             var showAnalytics = index == AnalyticsSectionIndex;
             var showDataInsight = index == DataInsightSectionIndex;
 
-            if (_homeView != null)
-            {
-                _homeView.Visible = showHome;
-            }
-
             if (showHome)
             {
                 ReloadDashboard();
             }
-
-            if (_monitorPage != null)
+            else
             {
-                _monitorPage.Visible = showMonitor;
                 if (showMonitor && refreshMonitorPage)
                 {
                     _monitorPage.RefreshData();
                 }
-            }
 
-            if (_alarmPage != null)
-            {
-                _alarmPage.Visible = showAlarm;
                 if (showAlarm && refreshAlarmPage)
                 {
                     _alarmPage.RefreshData();
                 }
-            }
 
-            if (_inspectionPage != null)
-            {
-                _inspectionPage.Visible = showInspection;
                 if (showInspection)
                 {
                     _inspectionPage.EndInteractiveResize();
@@ -731,21 +1073,62 @@ namespace WinFormsApp.Views
                         _inspectionPage.RefreshData();
                     }
                 }
-            }
 
-            if (_analyticsPage != null)
-            {
-                _analyticsPage.Visible = showAnalytics;
                 if (showAnalytics && refreshAnalyticsPage)
                 {
                     _analyticsPage.RefreshData();
                 }
             }
 
-            if (_dataInsightPage != null)
+            if (_mainArea is null)
             {
-                _dataInsightPage.Visible = showDataInsight;
+                return;
             }
+
+            _mainArea.SuspendLayout();
+
+            if (_homeView != null)
+            {
+                _homeView.Visible = false;
+            }
+
+            _monitorPage.Visible = false;
+            _alarmPage.Visible = false;
+            _inspectionPage.Visible = false;
+            _analyticsPage.Visible = false;
+            _dataInsightPage.Visible = false;
+
+            Control? activeSection = showHome
+                ? _homeView
+                : showMonitor
+                    ? _monitorPage
+                    : showAlarm
+                        ? _alarmPage
+                        : showInspection
+                            ? _inspectionPage
+                            : showAnalytics
+                                ? _analyticsPage
+                                : showDataInsight
+                                    ? _dataInsightPage
+                                    : _homeView;
+
+            if (activeSection is not null)
+            {
+                activeSection.Visible = true;
+                activeSection.BringToFront();
+                activeSection.PerformLayout();
+            }
+
+            _mainArea.ResumeLayout(true);
+            _mainArea.PerformLayout();
+            _mainArea.Invalidate(true);
+            if (activeSection is not null)
+            {
+                InvalidateControlTree(activeSection);
+                activeSection.Update();
+            }
+
+            _mainArea.Update();
         }
 
         private void UpdateNavigationSelection(int index)
@@ -1210,13 +1593,12 @@ namespace WinFormsApp.Views
             {
                 var g = e.Graphics;
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.SmoothingMode = _isInteractiveResize ? SmoothingMode.HighSpeed : SmoothingMode.AntiAlias;
 
                 float alpha = Math.Min(1f, _animProgress * 2f);
 
                 // 标题
-                using var titleFont = new Font("Microsoft YaHei UI", 24, FontStyle.Bold);
-                using var subFont = new Font("Microsoft YaHei UI", 11, FontStyle.Regular);
+                Font titleFont;
                 int titleA = _isDarkTheme ? 235 : 255;
                 int subA = _isDarkTheme ? 155 : 255;
                 Color headerTextColor = _isDarkTheme ? CurrentTheme.TextSecondary : Color.FromArgb(34, 44, 58);
@@ -1225,19 +1607,39 @@ namespace WinFormsApp.Views
 
                 // 右上角 - 时间显示
                 string timeStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
-                var timeSize = g.MeasureString(timeStr, subFont);
+                var timeFont = SelectSingleLineFont(timeStr, HeaderSubtitleFonts, 180F);
+                var timeSize = MeasureSingleLineText(timeStr, timeFont);
                 int timeA = _isDarkTheme ? 180 : 255;
                 using var timeBrush = new SolidBrush(Color.FromArgb((int)(alpha * timeA), headerTextColor));
-                var timeX = header.Width - timeSize.Width - 18;
-                g.DrawString(timeStr, subFont, timeBrush, timeX, 24);
+                var timeX = header.Width - timeSize.Width - 18F;
+                g.DrawString(
+                    timeStr,
+                    timeFont,
+                    timeBrush,
+                    new RectangleF(timeX, 24F, timeSize.Width + 2F, timeSize.Height + 4F),
+                    TopAlignedSingleLineTextFormat);
 
-                var titleRect = new RectangleF(10, 10, Math.Max(240, timeX - 28), 44);
-                var subtitleRect = new RectangleF(12, 60, Math.Max(240, timeX - 30), 28);
+                var contentWidth = Math.Max(240F, timeX - 28F);
+                titleFont = SelectSingleLineFont(_dashboard.HeaderTitle, HeaderTitleFonts, contentWidth);
+                var titleSize = MeasureSingleLineText(_dashboard.HeaderTitle, titleFont);
+                var titleRect = new RectangleF(10F, 10F, contentWidth, titleSize.Height + 6F);
+                var subtitleTop = titleRect.Bottom + 6F;
+                var subtitleHeight = Math.Max(24F, header.Height - subtitleTop - 12F);
+                var subtitleFont = SelectWrappedFont(g, _dashboard.HeaderSubtitle, HeaderSubtitleFonts, contentWidth, subtitleHeight);
+                var subtitleNeedsWrap = MeasureSingleLineText(_dashboard.HeaderSubtitle, subtitleFont).Width > contentWidth;
+                var subtitleSize = subtitleNeedsWrap
+                    ? MeasureWrappedText(g, _dashboard.HeaderSubtitle, subtitleFont, contentWidth)
+                    : MeasureSingleLineText(_dashboard.HeaderSubtitle, subtitleFont);
+                var subtitleRect = new RectangleF(12F, subtitleTop, contentWidth, Math.Max(subtitleHeight, subtitleSize.Height + 4F));
                 using var titleBrush = new SolidBrush(titleColor);
                 using var subtitleBrush = new SolidBrush(subtitleColor);
-                using var headerTextFormat = CreateSingleLineTextFormat();
-                g.DrawString(_dashboard.HeaderTitle, titleFont, titleBrush, titleRect, headerTextFormat);
-                g.DrawString(_dashboard.HeaderSubtitle, subFont, subtitleBrush, subtitleRect, headerTextFormat);
+                g.DrawString(_dashboard.HeaderTitle, titleFont, titleBrush, titleRect, TopAlignedSingleLineTextFormat);
+                g.DrawString(
+                    _dashboard.HeaderSubtitle,
+                    subtitleFont,
+                    subtitleBrush,
+                    subtitleRect,
+                    subtitleNeedsWrap ? WrappedTextFormat : TopAlignedSingleLineTextFormat);
             };
 
             return header;
@@ -1259,7 +1661,7 @@ namespace WinFormsApp.Views
             container.Paint += (s, e) =>
             {
                 var g = e.Graphics;
-                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.SmoothingMode = _isInteractiveResize ? SmoothingMode.HighSpeed : SmoothingMode.AntiAlias;
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
                 _cardHitRegions.Clear();
 
@@ -1283,7 +1685,10 @@ namespace WinFormsApp.Views
                     var rect = new Rectangle(x, y + offsetY, cardWidth, cardHeight);
                     if (_isDarkTheme)
                     {
-                        DrawDarkSurfaceShadow(g, rect, 16);
+                        if (!_isInteractiveResize)
+                        {
+                            DrawDarkSurfaceShadow(g, rect, 16);
+                        }
                         
                         var cardPath = CreateRoundRectPath(rect, 16);
                         using var cardBrush = new SolidBrush(Color.FromArgb(Math.Min(255, (int)(eased * 255)), CurrentTheme.Card));
@@ -1313,8 +1718,8 @@ namespace WinFormsApp.Views
                         _ => 11F
                     };
                     using var iconFont = new Font("Microsoft YaHei UI", cardIconFontSize, FontStyle.Bold);
-                    var iconTextSize = g.MeasureString(cardIconText, iconFont);
-                    var iconBgWidth = Math.Max(44, (int)Math.Ceiling(iconTextSize.Width) + 22);
+                    var iconTextSize = MeasureSingleLineText(cardIconText, iconFont);
+                    var iconBgWidth = Math.Max(44, iconTextSize.Width + 22);
                     const int iconBgHeight = 32;
                     var iconBgRect = new Rectangle(rect.X + 20, rect.Y + 26, iconBgWidth, iconBgHeight);
                     using var iconBgBrush = new SolidBrush(_isDarkTheme
@@ -1329,17 +1734,26 @@ namespace WinFormsApp.Views
                         iconFont,
                         iconBrush,
                         iconBgRect.X + (iconBgRect.Width - iconTextSize.Width) / 2,
-                        iconBgRect.Y + (iconBgRect.Height - iconTextSize.Height) / 2 - 1);
+                        iconBgRect.Y + (iconBgRect.Height - iconTextSize.Height) / 2F - 1F);
 
                     // 数值与说明按固定文本区域绘制，避免中文字体高度变化时互相重叠
-                    using var valueFont = new Font("Segoe UI", 22, FontStyle.Bold);
-                    using var labelFont = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Regular);
-                    using var subFont = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Regular);
-
                     var contentWidth = rect.Width - 40;
-                    var valueRect = new RectangleF(rect.X + 20, rect.Y + 68, contentWidth, 40);
-                    var titleRect = new RectangleF(rect.X + 20, rect.Y + 108, contentWidth, 24);
-                    var detailRect = new RectangleF(rect.X + 20, rect.Y + 130, contentWidth, 22);
+                    var valueFont = SelectSingleLineFont(cardData[i].Value, CardValueFonts, contentWidth);
+                    var labelFont = SelectSingleLineFont(cardData[i].Title, CardLabelFonts, contentWidth);
+                    var subFont = SelectSingleLineFont(cardData[i].Detail, CardDetailFonts, contentWidth);
+                    var valueSize = MeasureSingleLineText(cardData[i].Value, valueFont);
+                    var labelSize = MeasureSingleLineText(cardData[i].Title, labelFont);
+                    var detailSize = MeasureSingleLineText(cardData[i].Detail, subFont);
+                    var valueRect = new RectangleF(rect.X + 20F, rect.Y + 68F, contentWidth, valueSize.Height + 6F);
+                    var titleRect = new RectangleF(rect.X + 20F, valueRect.Bottom + 2F, contentWidth, labelSize.Height + 4F);
+                    var detailRect = new RectangleF(rect.X + 20F, titleRect.Bottom + 2F, contentWidth, detailSize.Height + 4F);
+                    var overflow = detailRect.Bottom - (rect.Bottom - 16F);
+                    if (overflow > 0)
+                    {
+                        valueRect.Y -= overflow;
+                        titleRect.Y -= overflow;
+                        detailRect.Y -= overflow;
+                    }
                     var valueColor = Color.FromArgb(Math.Min(255, alpha), CurrentTheme.TextPrimary);
                     var labelColor = Color.FromArgb(_isDarkTheme ? Math.Min(230, alpha) : Math.Min(255, alpha), CurrentTheme.TextSecondary);
                     var detailColor = Color.FromArgb(Math.Min(255, alpha), cardData[i].AccentColor);
@@ -1347,10 +1761,9 @@ namespace WinFormsApp.Views
                     using var valueBrush = new SolidBrush(valueColor);
                     using var labelBrush = new SolidBrush(labelColor);
                     using var detailBrush = new SolidBrush(detailColor);
-                    using var cardTextFormat = CreateSingleLineTextFormat();
-                    g.DrawString(cardData[i].Value, valueFont, valueBrush, valueRect, cardTextFormat);
-                    g.DrawString(cardData[i].Title, labelFont, labelBrush, titleRect, cardTextFormat);
-                    g.DrawString(cardData[i].Detail, subFont, detailBrush, detailRect, cardTextFormat);
+                    g.DrawString(cardData[i].Value, valueFont, valueBrush, valueRect, TopAlignedSingleLineTextFormat);
+                    g.DrawString(cardData[i].Title, labelFont, labelBrush, titleRect, TopAlignedSingleLineTextFormat);
+                    g.DrawString(cardData[i].Detail, subFont, detailBrush, detailRect, TopAlignedSingleLineTextFormat);
                 }
             };
 
@@ -1372,7 +1785,7 @@ namespace WinFormsApp.Views
             bottom.Paint += (s, e) =>
             {
                 var g = e.Graphics;
-                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.SmoothingMode = _isInteractiveResize ? SmoothingMode.HighSpeed : SmoothingMode.AntiAlias;
                 g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
                 _quickActionHitRegions.Clear();
 
@@ -1391,7 +1804,10 @@ namespace WinFormsApp.Views
                 if (_isDarkTheme)
                 {
                     var leftPath = CreateRoundRectPath(leftRect, 16);
-                    DrawDarkSurfaceShadow(g, leftRect, 16);
+                    if (!_isInteractiveResize)
+                    {
+                        DrawDarkSurfaceShadow(g, leftRect, 16);
+                    }
                     using var bgBrush = new SolidBrush(Color.FromArgb(Math.Min(255, (int)(eased * 255)), CurrentTheme.Card));
                     g.FillPath(bgBrush, leftPath);
                     using var borderPen = new Pen(Color.FromArgb(Math.Min(80, alpha / 3), 255, 255, 255), 1.2f);
@@ -1405,7 +1821,8 @@ namespace WinFormsApp.Views
                 if (alpha > 10)
                 {
                     // 面板标题
-                    using var panelTitleFont = new Font("Segoe UI", 14, FontStyle.Bold);
+                    
+                    var panelTitleFont = PanelTitleFont;
                     using var panelTitleBrush = new SolidBrush(Color.FromArgb(_isDarkTheme ? Math.Min(235, alpha) : Math.Min(255, alpha), CurrentTheme.TextPrimary));
                     g.DrawString("最近活动", panelTitleFont, panelTitleBrush, leftRect.X + 24, leftRect.Y + 18);
 
@@ -1442,13 +1859,13 @@ namespace WinFormsApp.Views
                         }
 
                         // 状态图标
-                        using var statusFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+                        var statusFont = StatusBadgeFont;
                         var statusText = logs[i].Status;
-                        var statusSize = g.MeasureString(statusText, statusFont);
+                        var statusSize = MeasureSingleLineText(statusText, statusFont);
                         var statusRect = new Rectangle(
                             leftRect.X + 24,
                             logY + Math.Max(0, (logH - 22) / 2),
-                            (int)Math.Ceiling(statusSize.Width) + 18,
+                            statusSize.Width + 18,
                             22);
                         using (var statusPath = CreateRoundRectPath(statusRect, 11))
                         {
@@ -1459,26 +1876,35 @@ namespace WinFormsApp.Views
                         }
 
                         using var statusBrush = new SolidBrush(Color.FromArgb(Math.Min(255, logAlpha), logs[i].AccentColor));
-                        g.DrawString(statusText, statusFont, statusBrush, statusRect.X + 9, statusRect.Y + 4);
+                        g.DrawString(
+                            statusText,
+                            statusFont,
+                            statusBrush,
+                            new RectangleF(statusRect.X + 9F, statusRect.Y, statusRect.Width - 12F, statusRect.Height),
+                            CenteredSingleLineTextFormat);
 
                         // 日志文本
-                        using var logFont = new Font("Segoe UI", 10);
+                        var logFont = SelectSingleLineFont(logs[i].Text, ActivityFonts, Math.Max(40F, leftRect.Right - (statusRect.Right + 12F) - 120F));
                         using var logBrush = new SolidBrush(Color.FromArgb(_isDarkTheme ? Math.Min(210, logAlpha) : Math.Min(255, logAlpha), CurrentTheme.TextPrimary));
                         var logText = logs[i].Text;
 
                         // 时间
-                        using var timeFont = new Font("Segoe UI", 9);
+                        var timeFont = ActivityTimeFont;
                         string timeStr = logs[i].Time;
-                        var timeSize = g.MeasureString(timeStr, timeFont);
+                        var timeSize = MeasureSingleLineText(timeStr, timeFont);
                         using var timeBrush = new SolidBrush(Color.FromArgb(_isDarkTheme ? Math.Min(120, logAlpha) : Math.Min(190, logAlpha), CurrentTheme.TextMuted));
-                        g.DrawString(timeStr, timeFont, timeBrush, leftRect.Right - timeSize.Width - 24, logY + (logH - 14) / 2);
+                        g.DrawString(
+                            timeStr,
+                            timeFont,
+                            timeBrush,
+                            new RectangleF(leftRect.Right - timeSize.Width - 24F, logY, timeSize.Width + 2F, logH),
+                            CenteredSingleLineTextFormat);
                         var logRect = new RectangleF(
                             statusRect.Right + 12,
                             logY,
                             Math.Max(40, leftRect.Right - timeSize.Width - 36 - (statusRect.Right + 12)),
                             logH);
-                        using var logTextFormat = CreateSingleLineTextFormat();
-                        g.DrawString(logText, logFont, logBrush, logRect, logTextFormat);
+                        g.DrawString(logText, logFont, logBrush, logRect, CenteredSingleLineTextFormat);
 
                         logY += logH;
                     }
@@ -1489,7 +1915,10 @@ namespace WinFormsApp.Views
                 if (_isDarkTheme)
                 {
                     var rightPath = CreateRoundRectPath(rightRect, 16);
-                    DrawDarkSurfaceShadow(g, rightRect, 16);
+                    if (!_isInteractiveResize)
+                    {
+                        DrawDarkSurfaceShadow(g, rightRect, 16);
+                    }
                     using var bgBrush = new SolidBrush(Color.FromArgb(Math.Min(255, (int)(eased * 255)), CurrentTheme.Card));
                     g.FillPath(bgBrush, rightPath);
                     using var borderPen = new Pen(Color.FromArgb(Math.Min(80, alpha / 3), 255, 255, 255), 1.2f);
@@ -1502,7 +1931,7 @@ namespace WinFormsApp.Views
 
                 if (alpha > 10)
                 {
-                    using var rtFont = new Font("Segoe UI", 14, FontStyle.Bold);
+                    var rtFont = PanelTitleFont;
                     using var rtBrush = new SolidBrush(Color.FromArgb(_isDarkTheme ? Math.Min(235, alpha) : Math.Min(255, alpha), CurrentTheme.TextPrimary));
                     g.DrawString("快捷操作", rtFont, rtBrush, rightRect.X + 24, rightRect.Y + 18);
 
@@ -1561,8 +1990,8 @@ namespace WinFormsApp.Views
                         var actionIconFontSize = actionIconText.Length >= 3 ? 8.8F : 10.2F;
                         using var btnIconFont = new Font("Microsoft YaHei UI", actionIconFontSize, FontStyle.Bold);
                         using var btnIconBrush = new SolidBrush(Color.FromArgb(Math.Min(255, btnAlpha), actions[i].PrimaryAccent));
-                        var btnIconSize = g.MeasureString(actionIconText, btnIconFont);
-                        var btnBadgeWidth = Math.Max(36, (int)Math.Ceiling(btnIconSize.Width) + 18);
+                        var btnIconSize = MeasureSingleLineText(actionIconText, btnIconFont);
+                        var btnBadgeWidth = Math.Max(36, btnIconSize.Width + 18);
                         var btnBadgeRect = new Rectangle(btnRect.X + 14, btnRect.Y + (btnRect.Height - 26) / 2, btnBadgeWidth, 26);
                         using var btnBadgePath = CreateRoundRectPath(btnBadgeRect, 9);
                         using var btnBadgeBrush = new SolidBrush(Color.FromArgb(Math.Min(34, btnAlpha / 6), actions[i].PrimaryAccent));
@@ -1574,15 +2003,23 @@ namespace WinFormsApp.Views
                             btnIconFont,
                             btnIconBrush,
                             btnBadgeRect.X + (btnBadgeRect.Width - btnIconSize.Width) / 2,
-                            btnBadgeRect.Y + (btnBadgeRect.Height - btnIconSize.Height) / 2 - 1);
+                            btnBadgeRect.Y + (btnBadgeRect.Height - btnIconSize.Height) / 2F - 1F);
 
                         // 文字
-                        using var btnTextFont = new Font("Segoe UI", 11, FontStyle.Bold);
+                        var btnTextFont = SelectSingleLineFont(actions[i].Text, QuickActionFonts, Math.Max(60F, btnRect.Width - btnBadgeRect.Width - 72F));
                         using var btnTextBrush = new SolidBrush(Color.FromArgb(_isDarkTheme ? Math.Min(220, btnAlpha) : Math.Min(255, btnAlpha), CurrentTheme.TextPrimary));
-                        g.DrawString(actions[i].Text, btnTextFont, btnTextBrush, btnBadgeRect.Right + 14, btnRect.Y + (btnRect.Height - 18) / 2);
+                        var arrowText = "\u2192";
+                        var arrowSize = MeasureSingleLineText(arrowText, ArrowFont);
+                        var textRect = new RectangleF(
+                            btnBadgeRect.Right + 14F,
+                            btnRect.Y,
+                            Math.Max(60F, btnRect.Right - btnBadgeRect.Right - arrowSize.Width - 56F),
+                            btnRect.Height);
+                        g.DrawString(actions[i].Text, btnTextFont, btnTextBrush, textRect, CenteredSingleLineTextFormat);
 
                         // 箭头
-                        using var arrowFont = new Font("Segoe UI", 11);
+                        
+                        var arrowFont = ArrowFont;
                         using var arrowBrush = new SolidBrush(Color.FromArgb(_isDarkTheme ? Math.Min(100, btnAlpha) : Math.Min(180, btnAlpha), CurrentTheme.TextMuted));
                         g.DrawString("→", arrowFont, arrowBrush, btnRect.Right - 30, btnRect.Y + (btnRect.Height - 18) / 2);
 
@@ -1638,7 +2075,8 @@ namespace WinFormsApp.Views
             if (_animProgress < 1.0f)
             {
                 _animProgress += 0.018f;
-                this.Invalidate(true);
+                InvalidateHomeSections();
+                _sidebar?.Invalidate();
 
                 // 通知所有子面板重绘
             }
@@ -1646,7 +2084,8 @@ namespace WinFormsApp.Views
             {
                 _animProgress = 1.0f;
                 _animTimer.Stop();
-                this.Invalidate(true);
+                InvalidateHomeSections();
+                _sidebar?.Invalidate();
             }
         }
 
@@ -1782,6 +2221,13 @@ namespace WinFormsApp.Views
             g.DrawPath(rimPen, cardPath);
         }
 
+        private void InvalidateHomeSections()
+        {
+            _homeHeader?.Invalidate();
+            _homeCardsArea?.Invalidate();
+            _homeBottomArea?.Invalidate();
+        }
+
         private static void InvalidateControlTree(Control root)
         {
             root.Invalidate(true);
@@ -1794,14 +2240,78 @@ namespace WinFormsApp.Views
             return 1 - (float)Math.Pow(1 - t, 3);
         }
 
-        private static StringFormat CreateSingleLineTextFormat()
+        private static Size MeasureSingleLineText(string text, Font font)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return Size.Empty;
+            }
+
+            return TextRenderer.MeasureText(
+                text,
+                font,
+                new Size(int.MaxValue, int.MaxValue),
+                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+        }
+
+        private static SizeF MeasureWrappedText(Graphics g, string text, Font font, float width)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return SizeF.Empty;
+            }
+
+            return g.MeasureString(
+                text,
+                font,
+                new SizeF(Math.Max(1F, width), 200F),
+                WrappedTextFormat);
+        }
+
+        private static Font SelectSingleLineFont(string text, Font[] candidates, float maxWidth)
+        {
+            foreach (var candidate in candidates)
+            {
+                if (MeasureSingleLineText(text, candidate).Width <= maxWidth)
+                {
+                    return candidate;
+                }
+            }
+
+            return candidates[^1];
+        }
+
+        private static Font SelectWrappedFont(Graphics g, string text, Font[] candidates, float maxWidth, float maxHeight)
+        {
+            foreach (var candidate in candidates)
+            {
+                if (MeasureWrappedText(g, text, candidate, maxWidth).Height <= maxHeight + 1F)
+                {
+                    return candidate;
+                }
+            }
+
+            return candidates[^1];
+        }
+
+        private static StringFormat CreateSingleLineTextFormat(StringAlignment lineAlignment)
         {
             return new StringFormat
             {
                 Alignment = StringAlignment.Near,
-                LineAlignment = StringAlignment.Center,
+                LineAlignment = lineAlignment,
                 Trimming = StringTrimming.EllipsisCharacter,
                 FormatFlags = StringFormatFlags.NoWrap
+            };
+        }
+
+        private static StringFormat CreateWrappedTextFormat()
+        {
+            return new StringFormat
+            {
+                Alignment = StringAlignment.Near,
+                LineAlignment = StringAlignment.Near,
+                Trimming = StringTrimming.EllipsisWord
             };
         }
 
