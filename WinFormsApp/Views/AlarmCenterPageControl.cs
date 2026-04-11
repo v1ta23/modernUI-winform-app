@@ -4,7 +4,7 @@ using WinFormsApp.ViewModels;
 
 namespace WinFormsApp.Views;
 
-internal sealed class AlarmCenterPageControl : UserControl
+internal sealed class AlarmCenterPageControl : UserControl, IInteractiveResizeAware
 {
     private static readonly Color PageBackground = PageChrome.PageBackground;
     private static readonly Color SurfaceBackground = PageChrome.SurfaceBackground;
@@ -18,6 +18,8 @@ internal sealed class AlarmCenterPageControl : UserControl
     private readonly string _account;
     private readonly InspectionController _inspectionController;
     private readonly Label _generatedAtLabel;
+    private readonly Control _layoutRoot;
+    private readonly InteractiveResizeFreezeController _interactiveResizeController;
     private Label _pendingValueLabel = null!;
     private Label _abnormalValueLabel = null!;
     private Label _warningValueLabel = null!;
@@ -65,7 +67,10 @@ internal sealed class AlarmCenterPageControl : UserControl
         root.Controls.Add(BuildSummaryArea(), 0, 1);
         root.Controls.Add(BuildBodyArea(), 0, 2);
 
+        _layoutRoot = root;
         Controls.Add(root);
+        _interactiveResizeController = new InteractiveResizeFreezeController(this, _layoutRoot, PageBackground);
+        _layoutRoot.BringToFront();
         ApplyTheme();
         Load += (_, _) => RefreshData();
     }
@@ -107,6 +112,25 @@ internal sealed class AlarmCenterPageControl : UserControl
         PageChrome.ApplyGridTheme(_pendingGrid);
         PageChrome.ApplyGridTheme(_historyGrid);
         Invalidate(true);
+    }
+
+    public void BeginInteractiveResize()
+    {
+        _interactiveResizeController.Begin();
+    }
+
+    public void EndInteractiveResize()
+    {
+        if (!_interactiveResizeController.IsActive)
+        {
+            return;
+        }
+
+        _interactiveResizeController.End();
+        _layoutRoot.PerformLayout();
+        PerformLayout();
+        Invalidate(true);
+        Update();
     }
 
     private Control BuildHeader(Button refreshButton, Button closeButton)

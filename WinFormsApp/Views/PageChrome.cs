@@ -166,6 +166,7 @@ internal static class PageChrome
         private readonly Label _subtitleLabel;
         private readonly Label _infoLabel;
         private int _lastLayoutWidth = -1;
+        private int _lastHeight = -1;
         private bool _lastStacked;
 
         public PageHeaderShell(string title, string subtitle, Label infoLabel, IReadOnlyList<Control> actions)
@@ -231,8 +232,8 @@ internal static class PageChrome
 
             Controls.Add(_layout);
             Resize += (_, _) => UpdateLayoutMode();
-            Layout += (_, _) => UpdateLayoutMode();
             VisibleChanged += (_, _) => UpdateLayoutMode();
+            EnsureLayoutStructure(false);
         }
 
         private void UpdateLayoutMode()
@@ -246,8 +247,9 @@ internal static class PageChrome
             }
 
             var preferredHeight = EnsureLayoutForWidth(outerWidth);
-            if (Height != preferredHeight)
+            if (_lastHeight != preferredHeight)
             {
+                _lastHeight = preferredHeight;
                 Height = preferredHeight;
             }
         }
@@ -270,69 +272,77 @@ internal static class PageChrome
                 ? availableWidth
                 : Math.Max(240, availableWidth - actionWidth - 24);
 
+            EnsureLayoutStructure(stacked);
+            if (_lastLayoutWidth != availableWidth)
+            {
+                _lastLayoutWidth = availableWidth;
+            }
+
             PrepareWrappingLabel(_titleLabel, textWidth);
             PrepareWrappingLabel(_subtitleLabel, textWidth);
             PrepareWrappingLabel(_infoLabel, textWidth);
-
-            if (_lastLayoutWidth != availableWidth || _lastStacked != stacked || _layout.Controls.Count == 0)
-            {
-                _lastLayoutWidth = availableWidth;
-                _lastStacked = stacked;
-
-                _layout.SuspendLayout();
-                _layout.Controls.Clear();
-                _layout.ColumnStyles.Clear();
-                _layout.RowStyles.Clear();
-
-                if (stacked)
-                {
-                    _layout.ColumnCount = 1;
-                    _layout.RowCount = _actionPanel.Controls.Count == 0 ? 1 : 2;
-                    _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-                    _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                    if (_actionPanel.Controls.Count > 0)
-                    {
-                        _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                        _actionPanel.Dock = DockStyle.Top;
-                        _actionPanel.FlowDirection = FlowDirection.LeftToRight;
-                        _actionPanel.WrapContents = true;
-                        _actionPanel.Margin = new Padding(0, 12, 0, 0);
-                    }
-
-                    _layout.Controls.Add(_titlePanel, 0, 0);
-                    if (_actionPanel.Controls.Count > 0)
-                    {
-                        _layout.Controls.Add(_actionPanel, 0, 1);
-                    }
-                }
-                else
-                {
-                    _layout.ColumnCount = _actionPanel.Controls.Count == 0 ? 1 : 2;
-                    _layout.RowCount = 1;
-                    _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-                    if (_actionPanel.Controls.Count > 0)
-                    {
-                        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                        _actionPanel.Dock = DockStyle.Fill;
-                        _actionPanel.FlowDirection = FlowDirection.RightToLeft;
-                        _actionPanel.WrapContents = false;
-                        _actionPanel.Margin = Padding.Empty;
-                    }
-
-                    _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                    _layout.Controls.Add(_titlePanel, 0, 0);
-                    if (_actionPanel.Controls.Count > 0)
-                    {
-                        _layout.Controls.Add(_actionPanel, 1, 0);
-                    }
-                }
-
-                _layout.ResumeLayout(true);
-            }
-
             return Math.Max(
                 HeaderHeight,
                 _layout.GetPreferredSize(new Size(Math.Max(1, availableWidth), 0)).Height + Padding.Vertical);
+        }
+
+        private void EnsureLayoutStructure(bool stacked)
+        {
+            if (_lastStacked == stacked && _layout.Controls.Count > 0)
+            {
+                return;
+            }
+
+            _lastStacked = stacked;
+            _layout.SuspendLayout();
+            _layout.Controls.Clear();
+            _layout.ColumnStyles.Clear();
+            _layout.RowStyles.Clear();
+
+            if (stacked)
+            {
+                _layout.ColumnCount = 1;
+                _layout.RowCount = _actionPanel.Controls.Count == 0 ? 1 : 2;
+                _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                if (_actionPanel.Controls.Count > 0)
+                {
+                    _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                    _actionPanel.Dock = DockStyle.Top;
+                    _actionPanel.FlowDirection = FlowDirection.LeftToRight;
+                    _actionPanel.WrapContents = true;
+                    _actionPanel.Margin = new Padding(0, 12, 0, 0);
+                }
+
+                _layout.Controls.Add(_titlePanel, 0, 0);
+                if (_actionPanel.Controls.Count > 0)
+                {
+                    _layout.Controls.Add(_actionPanel, 0, 1);
+                }
+            }
+            else
+            {
+                _layout.ColumnCount = _actionPanel.Controls.Count == 0 ? 1 : 2;
+                _layout.RowCount = 1;
+                _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                if (_actionPanel.Controls.Count > 0)
+                {
+                    _layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                    _actionPanel.Dock = DockStyle.Fill;
+                    _actionPanel.FlowDirection = FlowDirection.RightToLeft;
+                    _actionPanel.WrapContents = false;
+                    _actionPanel.Margin = Padding.Empty;
+                }
+
+                _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                _layout.Controls.Add(_titlePanel, 0, 0);
+                if (_actionPanel.Controls.Count > 0)
+                {
+                    _layout.Controls.Add(_actionPanel, 1, 0);
+                }
+            }
+
+            _layout.ResumeLayout(true);
         }
     }
 
@@ -342,6 +352,7 @@ internal static class PageChrome
         private readonly TableLayoutPanel _headerLayout;
         private readonly Label _titleLabel;
         private readonly Label _subtitleLabel;
+        private int _lastHeaderWidth = -1;
 
         public SectionShellPanel(string title, Label subtitleLabel, Control body, Padding margin)
             : base()
@@ -398,6 +409,12 @@ internal static class PageChrome
         private void UpdateWrapping()
         {
             var headerWidth = Math.Max(160, ClientSize.Width - SectionHeaderPadding.Horizontal - 8);
+            if (_lastHeaderWidth == headerWidth)
+            {
+                return;
+            }
+
+            _lastHeaderWidth = headerWidth;
             PrepareWrappingLabel(_titleLabel, headerWidth);
             PrepareWrappingLabel(_subtitleLabel, headerWidth);
         }
@@ -410,6 +427,8 @@ internal static class PageChrome
         private readonly Label _valueLabel;
         private readonly Label _noteLabel;
         private readonly Color _accentColor;
+        private int _lastContentWidth = -1;
+        private bool _lastStacked;
 
         public MetricCardShell(string title, Color accentColor, Label valueLabel, Label noteLabel, Padding margin)
             : base()
@@ -442,6 +461,7 @@ internal static class PageChrome
             };
 
             Resize += (_, _) => UpdateLayoutMode();
+            EnsureLayoutStructure(false);
             UpdateLayoutMode();
         }
 
@@ -450,10 +470,26 @@ internal static class PageChrome
             var contentWidth = Math.Max(160, ClientSize.Width - Padding.Horizontal);
             var stacked = contentWidth < 220;
 
+            if (_lastContentWidth == contentWidth && _lastStacked == stacked)
+            {
+                return;
+            }
+
+            _lastContentWidth = contentWidth;
             _valueLabel.AutoSize = true;
             _noteLabel.AutoEllipsis = false;
             PrepareWrappingLabel(_noteLabel, Math.Max(140, contentWidth - 4));
+            EnsureLayoutStructure(stacked);
+        }
 
+        private void EnsureLayoutStructure(bool stacked)
+        {
+            if (_lastStacked == stacked && _layout.Controls.Count > 0)
+            {
+                return;
+            }
+
+            _lastStacked = stacked;
             _layout.SuspendLayout();
             _layout.Controls.Clear();
             _layout.ColumnStyles.Clear();
@@ -525,6 +561,8 @@ internal static class PageChrome
 
     internal static void BindControlHeightToRow(TableLayoutPanel layout, int rowIndex, Control control)
     {
+        var lastHeight = -1;
+
         void SyncRowHeight(object? sender, EventArgs e)
         {
             if (rowIndex < 0 || rowIndex >= layout.RowStyles.Count)
@@ -532,11 +570,17 @@ internal static class PageChrome
                 return;
             }
 
+            var targetHeight = Math.Max(HeaderHeight, control.Height + control.Margin.Vertical);
+            if (lastHeight == targetHeight)
+            {
+                return;
+            }
+
+            lastHeight = targetHeight;
             var style = layout.RowStyles[rowIndex];
             style.SizeType = SizeType.Absolute;
-            style.Height = Math.Max(HeaderHeight, control.Height + control.Margin.Vertical);
+            style.Height = targetHeight;
             layout.PerformLayout();
-            layout.Parent?.PerformLayout();
         }
 
         control.SizeChanged += SyncRowHeight;
@@ -715,8 +759,17 @@ internal static class PageChrome
 
     private static void PrepareWrappingLabel(Label label, int availableWidth)
     {
+        var wrappedWidth = Math.Max(120, availableWidth);
+        if (label.MaximumSize.Width == wrappedWidth &&
+            label.MaximumSize.Height == 0 &&
+            label.AutoSize &&
+            !label.AutoEllipsis)
+        {
+            return;
+        }
+
         label.AutoEllipsis = false;
         label.AutoSize = true;
-        label.MaximumSize = new Size(Math.Max(120, availableWidth), 0);
+        label.MaximumSize = new Size(wrappedWidth, 0);
     }
 }

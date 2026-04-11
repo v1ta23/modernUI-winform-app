@@ -34,6 +34,7 @@ namespace WinFormsApp.Views
         private const int InspectionSectionIndex = 3;
         private const int AnalyticsSectionIndex = 4;
         private const int DataInsightSectionIndex = 5;
+        private const int WmEnterSizeMove = 0x0231;
         private const int WmSizing = 0x0214;
         private const int WmExitSizeMove = 0x0232;
 
@@ -205,7 +206,7 @@ namespace WinFormsApp.Views
         private readonly List<Panel> _navItems = new List<Panel>();
         private bool _isDarkTheme = true;
         private bool _isInteractiveResize;
-        private bool _windowEffectsSuspended;
+        private IInteractiveResizeAware? _activeInteractiveResizePage;
         private Panel _navIndicator = null!;
         private Panel _sidebar = null!;
         private Panel _mainArea = null!;
@@ -446,7 +447,7 @@ namespace WinFormsApp.Views
 
         protected override void WndProc(ref Message m)
         {
-            if (m.Msg == WmSizing)
+            if (m.Msg == WmEnterSizeMove || m.Msg == WmSizing)
             {
                 BeginInteractiveResize();
             }
@@ -538,29 +539,6 @@ namespace WinFormsApp.Views
             catch { }
         }
 
-        private void SuspendWindowEffects()
-        {
-            if (_windowEffectsSuspended || !IsHandleCreated)
-            {
-                return;
-            }
-
-            _windowEffectsSuspended = true;
-            DisableAcrylicBlur();
-        }
-
-        private void ResumeWindowEffects()
-        {
-            if (!_windowEffectsSuspended || !IsHandleCreated)
-            {
-                return;
-            }
-
-            _windowEffectsSuspended = false;
-            SetDarkTitleBar();
-            EnableAcrylicBlur();
-        }
-
         private void BeginInteractiveResize()
         {
             if (_isInteractiveResize)
@@ -574,12 +552,8 @@ namespace WinFormsApp.Views
                 _animTimer.Stop();
             }
 
-            SuspendWindowEffects();
-
-            if (_inspectionPage.Visible)
-            {
-                _inspectionPage.BeginInteractiveResize();
-            }
+            _activeInteractiveResizePage = GetVisibleInteractiveResizeAware();
+            _activeInteractiveResizePage?.BeginInteractiveResize();
         }
 
         private void EndInteractiveResize()
@@ -590,14 +564,41 @@ namespace WinFormsApp.Views
             }
 
             _isInteractiveResize = false;
-            if (_inspectionPage.Visible)
-            {
-                _inspectionPage.EndInteractiveResize();
-            }
+            _activeInteractiveResizePage?.EndInteractiveResize();
+            _activeInteractiveResizePage = null;
 
-            ResumeWindowEffects();
             InvalidateHomeSections();
             Invalidate(true);
+        }
+
+        private IInteractiveResizeAware? GetVisibleInteractiveResizeAware()
+        {
+            if (_inspectionPage.Visible)
+            {
+                return _inspectionPage;
+            }
+
+            if (_monitorPage.Visible)
+            {
+                return _monitorPage;
+            }
+
+            if (_alarmPage.Visible)
+            {
+                return _alarmPage;
+            }
+
+            if (_analyticsPage.Visible)
+            {
+                return _analyticsPage;
+            }
+
+            if (_dataInsightPage.Visible)
+            {
+                return _dataInsightPage;
+            }
+
+            return null;
         }
 
         private void SetResizeRedrawEnabled(bool enabled)
@@ -950,8 +951,7 @@ namespace WinFormsApp.Views
                 _sidebar.BackColor = theme.Sidebar;
 
             SetDarkTitleBar();
-            if (!_windowEffectsSuspended)
-                EnableAcrylicBlur();
+            EnableAcrylicBlur();
             
             _monitorPage?.ApplyTheme();
             _alarmPage?.ApplyTheme();
@@ -1048,6 +1048,13 @@ namespace WinFormsApp.Views
             var showInspection = index == InspectionSectionIndex;
             var showAnalytics = index == AnalyticsSectionIndex;
             var showDataInsight = index == DataInsightSectionIndex;
+            var previousResizeAware = GetVisibleInteractiveResizeAware();
+
+            previousResizeAware?.EndInteractiveResize();
+            if (ReferenceEquals(_activeInteractiveResizePage, previousResizeAware))
+            {
+                _activeInteractiveResizePage = null;
+            }
 
             if (showHome)
             {
@@ -1067,7 +1074,6 @@ namespace WinFormsApp.Views
 
                 if (showInspection)
                 {
-                    _inspectionPage.EndInteractiveResize();
                     if (refreshInspectionPage)
                     {
                         _inspectionPage.RefreshData();

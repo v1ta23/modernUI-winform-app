@@ -7,7 +7,7 @@ using WinFormsApp.ViewModels;
 
 namespace WinFormsApp.Views;
 
-internal sealed class DataInsightPageControl : UserControl
+internal sealed class DataInsightPageControl : UserControl, IInteractiveResizeAware
 {
     private const int PreviewLimit = 200;
 
@@ -26,6 +26,8 @@ internal sealed class DataInsightPageControl : UserControl
     private readonly InspectionController _controller;
     private readonly string _account;
     private readonly Label _generatedAtLabel;
+    private readonly Control _layoutRoot;
+    private readonly InteractiveResizeFreezeController _interactiveResizeController;
     private readonly Button _selectFileButton;
     private readonly Button _clearButton;
     private readonly Button _importButton;
@@ -93,7 +95,10 @@ internal sealed class DataInsightPageControl : UserControl
         root.Controls.Add(BuildActionBar(), 0, 1);
         root.Controls.Add(BuildWorkspaceArea(), 0, 2);
 
+        _layoutRoot = root;
         Controls.Add(root);
+        _interactiveResizeController = new InteractiveResizeFreezeController(this, _layoutRoot, PageBackground);
+        _layoutRoot.BringToFront();
 
         _selectFileButton.Click += (_, _) => ChooseCsvFile();
         _clearButton.Click += (_, _) => ResetState();
@@ -118,6 +123,25 @@ internal sealed class DataInsightPageControl : UserControl
         BackColor = PageBackground;
         PageChrome.ApplyGridTheme(_previewGrid);
         Invalidate(true);
+    }
+
+    public void BeginInteractiveResize()
+    {
+        _interactiveResizeController.Begin();
+    }
+
+    public void EndInteractiveResize()
+    {
+        if (!_interactiveResizeController.IsActive)
+        {
+            return;
+        }
+
+        _interactiveResizeController.End();
+        _layoutRoot.PerformLayout();
+        PerformLayout();
+        Invalidate(true);
+        Update();
     }
 
     private Control BuildHeader()

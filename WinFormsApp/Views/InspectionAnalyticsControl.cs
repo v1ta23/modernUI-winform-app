@@ -6,7 +6,7 @@ using System.Drawing.Text;
 
 namespace WinFormsApp.Views;
 
-internal sealed class InspectionAnalyticsControl : UserControl
+internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResizeAware
 {
     private static readonly Color PageBackground = PageChrome.PageBackground;
     private static readonly Color SurfaceBackground = PageChrome.SurfaceBackground;
@@ -24,6 +24,7 @@ internal sealed class InspectionAnalyticsControl : UserControl
     private readonly Label _generatedAtLabel;
     private readonly TableLayoutPanel _rootLayout;
     private readonly Control _headerShell;
+    private readonly InteractiveResizeFreezeController _interactiveResizeController;
     private readonly BufferedPanel _trendChartPanel;
     private readonly BufferedPanel _statusChartPanel;
     private readonly DataGridView _lineSummaryGrid;
@@ -37,12 +38,9 @@ internal sealed class InspectionAnalyticsControl : UserControl
     private Label _lineSubtitleLabel = null!;
     private Label _issueSubtitleLabel = null!;
     private Label _summarySubtitleLabel = null!;
-    private readonly Label _summaryRiskValueLabel;
-    private readonly Label _summaryRiskNoteLabel;
-    private readonly Label _summaryLineValueLabel;
-    private readonly Label _summaryLineNoteLabel;
-    private readonly Label _summaryActionValueLabel;
-    private readonly Label _summaryActionNoteLabel;
+    private readonly SummaryHintRow _summaryRiskHintRow;
+    private readonly SummaryHintRow _summaryLineHintRow;
+    private readonly SummaryHintRow _summaryActionHintRow;
 
     private InspectionDashboardViewModel _currentDashboard = new();
     private IReadOnlyList<LineSummaryRow> _lineRows = Array.Empty<LineSummaryRow>();
@@ -86,12 +84,9 @@ internal sealed class InspectionAnalyticsControl : UserControl
         _summaryTextBlock = PageChrome.CreateReadOnlyTextBlock();
         _summaryTextBlock.Font = new Font("Microsoft YaHei UI", 8.8F);
 
-        _summaryRiskValueLabel = PageChrome.CreateValueLabel(14F, "--");
-        _summaryRiskNoteLabel = PageChrome.CreateNoteLabel();
-        _summaryLineValueLabel = PageChrome.CreateValueLabel(14F, "--");
-        _summaryLineNoteLabel = PageChrome.CreateNoteLabel();
-        _summaryActionValueLabel = PageChrome.CreateValueLabel(14F, "--");
-        _summaryActionNoteLabel = PageChrome.CreateNoteLabel();
+        _summaryRiskHintRow = new SummaryHintRow("风险级别", DangerColor);
+        _summaryLineHintRow = new SummaryHintRow("重点产线", WarningColor);
+        _summaryActionHintRow = new SummaryHintRow("下一步", AccentBlue);
 
         var refreshButton = PageChrome.CreateActionButton("刷新数据", AccentBlue, true);
         refreshButton.Click += (_, _) => RefreshData();
@@ -120,6 +115,8 @@ internal sealed class InspectionAnalyticsControl : UserControl
         _rootLayout.Controls.Add(BuildSummaryRow(), 0, 4);
 
         Controls.Add(_rootLayout);
+        _interactiveResizeController = new InteractiveResizeFreezeController(this, _rootLayout, PageBackground);
+        _rootLayout.BringToFront();
         VisibleChanged += (_, _) => QueueVisibleLayoutPass();
         ApplyTheme();
         RefreshData();
@@ -133,6 +130,28 @@ internal sealed class InspectionAnalyticsControl : UserControl
         PageChrome.ApplyGridTheme(_lineSummaryGrid);
         PageChrome.ApplyGridTheme(_issueGrid);
         Invalidate(true);
+    }
+
+    public void BeginInteractiveResize()
+    {
+        _interactiveResizeController.Begin();
+    }
+
+    public void EndInteractiveResize()
+    {
+        if (!_interactiveResizeController.IsActive)
+        {
+            return;
+        }
+
+        _interactiveResizeController.End();
+        _headerShell.PerformLayout();
+        _rootLayout.PerformLayout();
+        PerformLayout();
+        _trendChartPanel.Invalidate();
+        _statusChartPanel.Invalidate();
+        Invalidate(true);
+        Update();
     }
 
     public void RefreshData()
@@ -170,18 +189,18 @@ internal sealed class InspectionAnalyticsControl : UserControl
         _summarySubtitleLabel.Text = BuildSummarySubtitle(pendingRows.Count, highRiskLine);
         _summaryTextBlock.Text = BuildSummaryText(pendingRows.Count, affectedDeviceCount, highRiskLine);
 
-        _summaryRiskValueLabel.Text = BuildRiskLevelText(pendingRows.Count, highRiskLine);
-        _summaryRiskNoteLabel.Text = pendingRows.Count == 0
+        _summaryRiskHintRow.ValueText = BuildRiskLevelText(pendingRows.Count, highRiskLine);
+        _summaryRiskHintRow.NoteText = pendingRows.Count == 0
             ? "当前没有待闭环问题。"
             : $"待闭环 {pendingRows.Count} 条，异常优先。";
 
-        _summaryLineValueLabel.Text = highRiskLine?.LineName ?? "暂无重点产线";
-        _summaryLineNoteLabel.Text = highRiskLine is null
+        _summaryLineHintRow.ValueText = highRiskLine?.LineName ?? "暂无重点产线";
+        _summaryLineHintRow.NoteText = highRiskLine is null
             ? "先看整体趋势和最近关注项。"
             : $"异常 {highRiskLine.AbnormalCount} 条 / 预警 {highRiskLine.WarningCount} 条。";
 
-        _summaryActionValueLabel.Text = BuildActionTitle(pendingRows.Count, highRiskLine);
-        _summaryActionNoteLabel.Text = pendingRows.Count > 0
+        _summaryActionHintRow.ValueText = BuildActionTitle(pendingRows.Count, highRiskLine);
+        _summaryActionHintRow.NoteText = pendingRows.Count > 0
             ? "建议先去报警中心或巡检页处理。"
             : "当前更适合复盘趋势和产线稳定性。";
 
@@ -319,8 +338,8 @@ internal sealed class InspectionAnalyticsControl : UserControl
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        summaryBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70F));
-        summaryBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30F));
+        summaryBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 64F));
+        summaryBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36F));
         summaryBody.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         var textShell = PageChrome.CreateSurfacePanel(
@@ -345,9 +364,12 @@ internal sealed class InspectionAnalyticsControl : UserControl
         hintLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.34F));
         hintLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
         hintLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
-        hintLayout.Controls.Add(CreateHintCard("风险级别", DangerColor, _summaryRiskValueLabel, _summaryRiskNoteLabel, new Padding(0, 0, 0, 8)), 0, 0);
-        hintLayout.Controls.Add(CreateHintCard("重点产线", WarningColor, _summaryLineValueLabel, _summaryLineNoteLabel, new Padding(0, 0, 0, 8)), 0, 1);
-        hintLayout.Controls.Add(CreateHintCard("下一步", AccentBlue, _summaryActionValueLabel, _summaryActionNoteLabel, Padding.Empty), 0, 2);
+        _summaryRiskHintRow.Margin = new Padding(0, 0, 0, 8);
+        _summaryLineHintRow.Margin = new Padding(0, 0, 0, 8);
+        _summaryActionHintRow.Margin = Padding.Empty;
+        hintLayout.Controls.Add(_summaryRiskHintRow, 0, 0);
+        hintLayout.Controls.Add(_summaryLineHintRow, 0, 1);
+        hintLayout.Controls.Add(_summaryActionHintRow, 0, 2);
 
         summaryBody.Controls.Add(textShell, 0, 0);
         summaryBody.Controls.Add(hintLayout, 1, 0);
@@ -360,39 +382,200 @@ internal sealed class InspectionAnalyticsControl : UserControl
             Padding.Empty);
     }
 
-    private static PageChrome.ChromePanel CreateHintCard(string title, Color accentColor, Label valueLabel, Label noteLabel, Padding margin)
+    private sealed class SummaryHintRow : Control
     {
-        var card = PageChrome.CreateSurfacePanel(
-            new Padding(14),
-            14,
-            fillColor: Color.FromArgb(18, accentColor),
-            borderColor: Color.FromArgb(76, accentColor));
-        card.Margin = margin;
+        private readonly Font _titleFont = new("Microsoft YaHei UI", 8.8F, FontStyle.Regular);
+        private readonly Font _valueFont = new("Microsoft YaHei UI", 11.6F, FontStyle.Bold);
+        private readonly Font _noteFont = new("Microsoft YaHei UI", 8.8F, FontStyle.Regular);
+        private readonly Color _fillColor;
+        private readonly Color _borderColor;
+        private string _valueText = "--";
+        private string _noteText = string.Empty;
 
-        valueLabel.Dock = DockStyle.Top;
-        valueLabel.Margin = Padding.Empty;
-        noteLabel.Dock = DockStyle.Top;
-        noteLabel.Margin = new Padding(0, 6, 0, 0);
-
-        var layout = new TableLayoutPanel
+        public SummaryHintRow(string title, Color accentColor)
         {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 3,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layout.Controls.Add(PageChrome.CreateNoteLabel(title, 8.8F, TextMutedColor), 0, 0);
-        layout.Controls.Add(valueLabel, 0, 1);
-        layout.Controls.Add(noteLabel, 0, 2);
+            Title = title;
+            _fillColor = MixColor(InputBackground, accentColor, 0.14F);
+            _borderColor = MixColor(SurfaceBorder, accentColor, 0.48F);
+            Dock = DockStyle.Fill;
+            Margin = Padding.Empty;
+            Padding = new Padding(12, 6, 12, 6);
+            BackColor = SurfaceBackground;
+            SetStyle(
+                ControlStyles.UserPaint |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.ResizeRedraw,
+                true);
+        }
 
-        card.Controls.Add(layout);
-        return card;
+        public string Title { get; }
+
+        public string ValueText
+        {
+            get => _valueText;
+            set
+            {
+                var next = value ?? string.Empty;
+                if (_valueText == next)
+                {
+                    return;
+                }
+
+                _valueText = next;
+                Invalidate();
+            }
+        }
+
+        public string NoteText
+        {
+            get => _noteText;
+            set
+            {
+                var next = value ?? string.Empty;
+                if (_noteText == next)
+                {
+                    return;
+                }
+
+                _noteText = next;
+                Invalidate();
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            if (Width <= 1 || Height <= 1)
+            {
+                return;
+            }
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+            var outerRect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var path = PageChrome.CreateRoundedPath(outerRect, 14))
+            using (var fillBrush = new SolidBrush(_fillColor))
+            using (var borderPen = new Pen(_borderColor))
+            {
+                e.Graphics.FillPath(fillBrush, path);
+                e.Graphics.DrawPath(borderPen, path);
+            }
+
+            var contentBounds = new Rectangle(
+                Padding.Left,
+                Padding.Top,
+                Math.Max(0, Width - Padding.Horizontal),
+                Math.Max(0, Height - Padding.Vertical));
+
+            if (contentBounds.Width <= 0 || contentBounds.Height <= 0)
+            {
+                return;
+            }
+
+            const TextFormatFlags singleLineFlags =
+                TextFormatFlags.Left |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPrefix |
+                TextFormatFlags.PreserveGraphicsTranslateTransform;
+
+            const TextFormatFlags multiLineFlags =
+                TextFormatFlags.Left |
+                TextFormatFlags.Top |
+                TextFormatFlags.WordBreak |
+                TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPrefix |
+                TextFormatFlags.PreserveGraphicsTranslateTransform;
+
+            var titleHeight = Math.Max(14, _titleFont.Height);
+            var valueHeight = Math.Max(20, _valueFont.Height);
+            var noteHeight = Math.Max(14, _noteFont.Height * 2);
+            var noteGap = string.IsNullOrWhiteSpace(_noteText) ? 0 : 3;
+            var compactMode = contentBounds.Height < titleHeight + valueHeight + 4;
+            var noteFits = !string.IsNullOrWhiteSpace(_noteText)
+                && !compactMode
+                && contentBounds.Height >= titleHeight + valueHeight + noteHeight + noteGap;
+
+            if (compactMode)
+            {
+                var measuredTitleWidth = TextRenderer.MeasureText(
+                    e.Graphics,
+                    Title,
+                    _titleFont,
+                    new Size(contentBounds.Width, contentBounds.Height),
+                    singleLineFlags).Width;
+                var titleWidth = Math.Min(
+                    Math.Max(72, measuredTitleWidth + 8),
+                    Math.Max(72, contentBounds.Width / 3));
+                var valueLeft = Math.Min(contentBounds.Right, contentBounds.X + titleWidth + 8);
+                var compactTitleBounds = new Rectangle(contentBounds.X, contentBounds.Y, titleWidth, contentBounds.Height);
+                var compactValueBounds = new Rectangle(
+                    valueLeft,
+                    contentBounds.Y,
+                    Math.Max(0, contentBounds.Right - valueLeft),
+                    contentBounds.Height);
+
+                TextRenderer.DrawText(e.Graphics, Title, _titleFont, compactTitleBounds, TextMutedColor, singleLineFlags);
+                TextRenderer.DrawText(e.Graphics, ValueText, _valueFont, compactValueBounds, TextPrimaryColor, singleLineFlags);
+                return;
+            }
+
+            var titleBounds = new Rectangle(contentBounds.X, contentBounds.Y, contentBounds.Width, titleHeight);
+            var valueTop = titleBounds.Bottom;
+            var valueAvailableHeight = noteFits
+                ? contentBounds.Bottom - noteGap - noteHeight - valueTop
+                : contentBounds.Bottom - valueTop;
+            var valueBounds = new Rectangle(
+                contentBounds.X,
+                valueTop,
+                contentBounds.Width,
+                Math.Max(0, valueAvailableHeight));
+
+            TextRenderer.DrawText(e.Graphics, Title, _titleFont, titleBounds, TextMutedColor, singleLineFlags);
+            TextRenderer.DrawText(e.Graphics, ValueText, _valueFont, valueBounds, TextPrimaryColor, singleLineFlags);
+
+            if (!noteFits)
+            {
+                return;
+            }
+
+            var noteBounds = new Rectangle(
+                contentBounds.X,
+                contentBounds.Bottom - noteHeight,
+                contentBounds.Width,
+                noteHeight);
+            TextRenderer.DrawText(e.Graphics, NoteText, _noteFont, noteBounds, TextMutedColor, multiLineFlags);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _titleFont.Dispose();
+                _valueFont.Dispose();
+                _noteFont.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            using var backgroundBrush = new SolidBrush(SurfaceBackground);
+            e.Graphics.FillRectangle(backgroundBrush, ClientRectangle);
+        }
+
+        private static Color MixColor(Color baseColor, Color overlayColor, float overlayWeight)
+        {
+            var weight = Math.Clamp(overlayWeight, 0F, 1F);
+            var baseWeight = 1F - weight;
+            return Color.FromArgb(
+                (int)Math.Round(baseColor.R * baseWeight + overlayColor.R * weight),
+                (int)Math.Round(baseColor.G * baseWeight + overlayColor.G * weight),
+                (int)Math.Round(baseColor.B * baseWeight + overlayColor.B * weight));
+        }
     }
 
     private static DataGridView CreateLineSummaryGrid()

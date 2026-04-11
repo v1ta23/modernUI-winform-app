@@ -4,7 +4,7 @@ using WinFormsApp.ViewModels;
 
 namespace WinFormsApp.Views;
 
-internal sealed class DeviceMonitorPageControl : UserControl
+internal sealed class DeviceMonitorPageControl : UserControl, IInteractiveResizeAware
 {
     private static readonly Color PageBackground = PageChrome.PageBackground;
     private static readonly Color SurfaceBackground = PageChrome.SurfaceBackground;
@@ -19,6 +19,8 @@ internal sealed class DeviceMonitorPageControl : UserControl
 
     private readonly InspectionController _inspectionController;
     private readonly Label _generatedAtLabel;
+    private readonly Control _layoutRoot;
+    private readonly InteractiveResizeFreezeController _interactiveResizeController;
     private Label _deviceCountValueLabel = null!;
     private Label _issueDeviceValueLabel = null!;
     private Label _issueDeviceNoteLabel = null!;
@@ -66,7 +68,10 @@ internal sealed class DeviceMonitorPageControl : UserControl
         root.Controls.Add(BuildSummaryArea(), 0, 1);
         root.Controls.Add(BuildBodyArea(), 0, 2);
 
+        _layoutRoot = root;
         Controls.Add(root);
+        _interactiveResizeController = new InteractiveResizeFreezeController(this, _layoutRoot, PageBackground);
+        _layoutRoot.BringToFront();
         ApplyTheme();
         Load += (_, _) => RefreshData();
     }
@@ -161,6 +166,25 @@ internal sealed class DeviceMonitorPageControl : UserControl
         PageChrome.ApplyGridTheme(_deviceGrid);
         PageChrome.ApplyGridTheme(_attentionGrid);
         Invalidate(true);
+    }
+
+    public void BeginInteractiveResize()
+    {
+        _interactiveResizeController.Begin();
+    }
+
+    public void EndInteractiveResize()
+    {
+        if (!_interactiveResizeController.IsActive)
+        {
+            return;
+        }
+
+        _interactiveResizeController.End();
+        _layoutRoot.PerformLayout();
+        PerformLayout();
+        Invalidate(true);
+        Update();
     }
 
     private Control BuildHeader(Button refreshButton)

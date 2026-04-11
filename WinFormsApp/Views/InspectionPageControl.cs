@@ -6,7 +6,7 @@ using WinFormsApp.ViewModels;
 
 namespace WinFormsApp.Views;
 
-internal sealed partial class InspectionPageControl : UserControl
+internal sealed partial class InspectionPageControl : UserControl, IInteractiveResizeAware
 {
     private static Color PageBackground = PageChrome.PageBackground;
     private static Color SurfaceBackground = PageChrome.SurfaceBackground;
