@@ -30,9 +30,6 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
     private readonly DataGridView _lineSummaryGrid;
     private readonly DataGridView _issueGrid;
     private readonly PageChrome.ReadOnlyTextBlock _summaryTextBlock;
-    private readonly Label _decisionValueLabel;
-    private readonly Label _decisionNoteLabel;
-    private Label _decisionSubtitleLabel = null!;
     private Label _trendSubtitleLabel = null!;
     private Label _statusSubtitleLabel = null!;
     private Label _lineSubtitleLabel = null!;
@@ -56,12 +53,6 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         Padding = PageChrome.PagePadding;
 
         _generatedAtLabel = PageChrome.CreateInfoLabel();
-        _decisionValueLabel = PageChrome.CreateValueLabel(14F, "--");
-        _decisionValueLabel.Dock = DockStyle.Top;
-        _decisionValueLabel.Margin = Padding.Empty;
-        _decisionNoteLabel = PageChrome.CreateNoteLabel();
-        _decisionNoteLabel.Dock = DockStyle.Top;
-        _decisionNoteLabel.Margin = new Padding(0, 8, 0, 0);
 
         _trendChartPanel = new BufferedPanel
         {
@@ -96,23 +87,21 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
             ColumnCount = 1,
-            RowCount = 5
+            RowCount = 4
         };
         _rootLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         _rootLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96F));
-        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 37F));
-        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 27F));
-        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 36F));
+        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 42F));
+        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 30F));
+        _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 28F));
 
         _headerShell = BuildHeader(refreshButton);
         PageChrome.BindControlHeightToRow(_rootLayout, 0, _headerShell);
 
         _rootLayout.Controls.Add(_headerShell, 0, 0);
-        _rootLayout.Controls.Add(BuildDecisionBar(), 0, 1);
-        _rootLayout.Controls.Add(BuildPrimaryRow(), 0, 2);
-        _rootLayout.Controls.Add(BuildSecondaryRow(), 0, 3);
-        _rootLayout.Controls.Add(BuildSummaryRow(), 0, 4);
+        _rootLayout.Controls.Add(BuildPrimaryRow(), 0, 1);
+        _rootLayout.Controls.Add(BuildSecondaryRow(), 0, 2);
+        _rootLayout.Controls.Add(BuildSummaryRow(), 0, 3);
 
         Controls.Add(_rootLayout);
         _interactiveResizeController = new InteractiveResizeFreezeController(this, _rootLayout, PageBackground);
@@ -182,10 +171,6 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
             ? "当前没有预警和异常记录。"
             : $"最近 {_attentionRows.Count} 条需关注记录。";
 
-        _decisionSubtitleLabel.Text = BuildDecisionSubtitle(pendingRows.Count, highRiskLine);
-        _decisionValueLabel.Text = BuildDecisionTitle(pendingRows.Count, highRiskLine);
-        _decisionNoteLabel.Text = BuildDecisionNote(pendingRows.Count, affectedDeviceCount, highRiskLine);
-
         _summarySubtitleLabel.Text = BuildSummarySubtitle(pendingRows.Count, highRiskLine);
         _summaryTextBlock.Text = BuildSummaryText(pendingRows.Count, affectedDeviceCount, highRiskLine);
 
@@ -240,31 +225,6 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
             "把关键判断、趋势和关注项放稳，不再用花哨结构挤内容。",
             _generatedAtLabel,
             refreshButton);
-    }
-
-    private Control BuildDecisionBar()
-    {
-        var content = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            ColumnCount = 1,
-            RowCount = 2,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        content.Controls.Add(_decisionValueLabel, 0, 0);
-        content.Controls.Add(_decisionNoteLabel, 0, 1);
-
-        return PageChrome.CreateSectionShell(
-            "核心判断",
-            "系统先给一句结论，再决定你先看哪个区块。",
-            out _decisionSubtitleLabel,
-            content,
-            new Padding(0, 0, 0, 12));
     }
 
     private Control BuildPrimaryRow()
@@ -329,27 +289,66 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
 
     private Control BuildSummaryRow()
     {
-        var summaryBody = new TableLayoutPanel
+        var summaryShell = new PageChrome.ChromePanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            FillColor = SurfaceBackground,
+            BorderColor = SurfaceBorder
+        };
+
+        var summaryLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
             ColumnCount = 2,
             RowCount = 1,
             Margin = Padding.Empty,
+            Padding = new Padding(16, 14, 16, 16)
+        };
+        summaryLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 64F));
+        summaryLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36F));
+        summaryLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+        var titleLabel = PageChrome.CreateTextLabel("AI 摘要", 11F, FontStyle.Bold, TextPrimaryColor, new Padding(0, 0, 0, 6));
+        _summarySubtitleLabel = PageChrome.CreateTextLabel(
+            "默认先给一句结论，再告诉你下一步看哪里。",
+            8.8F,
+            FontStyle.Regular,
+            TextMutedColor,
+            new Padding(0, 0, 0, 8));
+
+        var leftLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent,
+            ColumnCount = 1,
+            RowCount = 3,
+            Margin = new Padding(0, 0, 12, 0),
             Padding = Padding.Empty
         };
-        summaryBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 64F));
-        summaryBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36F));
-        summaryBody.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        leftLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        leftLayout.Resize += (_, _) =>
+        {
+            var labelWidth = Math.Max(120, leftLayout.ClientSize.Width - 4);
+            titleLabel.MaximumSize = new Size(labelWidth, 0);
+            _summarySubtitleLabel.MaximumSize = new Size(labelWidth, 0);
+        };
 
         var textShell = PageChrome.CreateSurfacePanel(
             new Padding(14),
             14,
             fillColor: InputBackground,
             borderColor: Color.FromArgb(70, SurfaceBorder));
-        textShell.Margin = new Padding(0, 0, 12, 0);
+        textShell.Margin = Padding.Empty;
         _summaryTextBlock.Padding = new Padding(0);
         textShell.Controls.Add(_summaryTextBlock);
+        leftLayout.Controls.Add(titleLabel, 0, 0);
+        leftLayout.Controls.Add(_summarySubtitleLabel, 0, 1);
+        leftLayout.Controls.Add(textShell, 0, 2);
 
         var hintLayout = new TableLayoutPanel
         {
@@ -371,15 +370,10 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         hintLayout.Controls.Add(_summaryLineHintRow, 0, 1);
         hintLayout.Controls.Add(_summaryActionHintRow, 0, 2);
 
-        summaryBody.Controls.Add(textShell, 0, 0);
-        summaryBody.Controls.Add(hintLayout, 1, 0);
-
-        return PageChrome.CreateSectionShell(
-            "AI 摘要",
-            "默认先给一句结论，再告诉你下一步看哪里。",
-            out _summarySubtitleLabel,
-            summaryBody,
-            Padding.Empty);
+        summaryLayout.Controls.Add(leftLayout, 0, 0);
+        summaryLayout.Controls.Add(hintLayout, 1, 0);
+        summaryShell.Controls.Add(summaryLayout);
+        return summaryShell;
     }
 
     private sealed class SummaryHintRow : Control
@@ -753,9 +747,12 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         }
 
         var compactLegend = contentRect.Width < 360;
-        var legendHeight = compactLegend ? counts.Length * 26 : 52;
-        var diameter = Math.Min(contentRect.Height - legendHeight - 16, contentRect.Width - 24);
-        diameter = Math.Max(100, diameter);
+        var legendHeight = compactLegend ? counts.Length * 26 : 44;
+        var availableDiameterHeight = contentRect.Height - legendHeight - 12;
+        var maxDiameter = Math.Max(1, Math.Min(contentRect.Width, contentRect.Height));
+        var minDiameter = Math.Min(compactLegend ? 56 : 78, maxDiameter);
+        var diameter = Math.Min(availableDiameterHeight, contentRect.Width - 24);
+        diameter = Math.Clamp(diameter, minDiameter, maxDiameter);
         var donutRect = new Rectangle(
             contentRect.Left + (contentRect.Width - diameter) / 2,
             contentRect.Top,
@@ -780,16 +777,22 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
             startAngle += sweepAngle;
         }
 
-        using var valueFont = new Font("Segoe UI", 18F, FontStyle.Bold);
+        var valueFontSize = diameter < 90 ? 15F : 18F;
+        using var valueFont = new Font("Segoe UI", valueFontSize, FontStyle.Bold);
         using var totalBrush = new SolidBrush(TextPrimaryColor);
         var totalText = total.ToString();
+        const string totalLabel = "总记录";
         var totalSize = g.MeasureString(totalText, valueFont);
+        var totalLabelSize = g.MeasureString(totalLabel, labelFont);
+        var totalGap = diameter < 90 ? 0F : 2F;
+        var totalBlockHeight = totalSize.Height + totalGap + totalLabelSize.Height;
+        var totalTop = donutRect.Top + (donutRect.Height - totalBlockHeight) / 2F;
         g.DrawString(totalText, valueFont, totalBrush,
             donutRect.Left + donutRect.Width / 2F - totalSize.Width / 2F,
-            donutRect.Top + donutRect.Height / 2F - 24F);
-        g.DrawString("总记录", labelFont, labelBrush,
-            donutRect.Left + donutRect.Width / 2F - 20F,
-            donutRect.Top + donutRect.Height / 2F + 6F);
+            totalTop);
+        g.DrawString(totalLabel, labelFont, labelBrush,
+            donutRect.Left + donutRect.Width / 2F - totalLabelSize.Width / 2F,
+            totalTop + totalSize.Height + totalGap);
 
         var legendArea = new Rectangle(
             contentRect.Left,
@@ -897,38 +900,16 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         return $"从 {points.First().Label} 到 {points.Last().Label} 的状态变化。";
     }
 
-    private string BuildDecisionSubtitle(int pendingCount, LineSummaryRow? highRiskLine)
-    {
-        if (_currentDashboard.AbnormalCount > 0)
-        {
-            return highRiskLine is null
-                ? "当前存在异常，建议先看最近关注项。"
-                : $"当前异常主要集中在 {highRiskLine.LineName}。";
-        }
-
-        if (pendingCount > 0)
-        {
-            return "当前没有异常压顶，但还有待闭环问题。";
-        }
-
-        if (_currentDashboard.WarningCount > 0)
-        {
-            return "当前以预警为主，建议做一次快速复核。";
-        }
-
-        return "当前整体平稳，可以把重点放在趋势复盘。";
-    }
-
     private string BuildDecisionTitle(int pendingCount, LineSummaryRow? highRiskLine)
     {
         if (_currentDashboard.AbnormalCount > 0)
         {
-            return $"结论：{highRiskLine?.LineName ?? "当前产线"} 风险偏高，异常需要优先处理。";
+            return $"结论：{highRiskLine?.LineName ?? "当前产线"} 风险偏高，异常优先处理。";
         }
 
         if (pendingCount > 0)
         {
-            return "结论：当前有待闭环问题，先把未处理项收干净。";
+            return "结论：当前有待闭环问题，先收干净。";
         }
 
         if (_currentDashboard.WarningCount > 0)
@@ -936,39 +917,12 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
             return "结论：当前以预警为主，先复核重点设备。";
         }
 
-        return "结论：当前巡检状态平稳，可以继续按节奏复盘。";
-    }
-
-    private string BuildDecisionNote(int pendingCount, int affectedDeviceCount, LineSummaryRow? highRiskLine)
-    {
-        if (_lineRows.Count == 0)
-        {
-            return "还没有可统计的数据，先补充巡检记录。";
-        }
-
-        if (pendingCount > 0)
-        {
-            return $"当前覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备。优先从 {highRiskLine?.LineName ?? "重点产线"} 开始。";
-        }
-
-        return $"当前覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备，先看趋势是否持续收敛。";
+        return "结论：当前巡检状态平稳，按节奏复盘。";
     }
 
     private string BuildSummarySubtitle(int pendingCount, LineSummaryRow? highRiskLine)
     {
-        if (_currentDashboard.AbnormalCount > 0)
-        {
-            return highRiskLine is null
-                ? "系统判断当前风险偏高。"
-                : $"系统判断 {highRiskLine.LineName} 是当前最该先看的产线。";
-        }
-
-        if (pendingCount > 0)
-        {
-            return "系统判断当前先闭环，再回头看趋势。";
-        }
-
-        return "系统判断当前风险可控，适合做复盘。";
+        return BuildDecisionTitle(pendingCount, highRiskLine);
     }
 
     private string BuildSummaryText(int pendingCount, int affectedDeviceCount, LineSummaryRow? highRiskLine)
@@ -985,7 +939,7 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
                 ? "当前没有待闭环问题，但最近仍有需要复核的记录，先看最近关注项。"
                 : "当前没有待闭环问题，下一步更适合看趋势是否持续稳定。";
 
-        return string.Join(Environment.NewLine, [BuildDecisionTitle(pendingCount, highRiskLine), $"{overview} {focus}", action]);
+        return string.Join(Environment.NewLine, [$"{overview} {focus}", action]);
     }
 
     private string BuildRiskLevelText(int pendingCount, LineSummaryRow? highRiskLine)
