@@ -29,12 +29,13 @@ namespace WinFormsApp.Views
     internal partial class MainForm : Form
     {
         private const int HomeSectionIndex = 0;
-        private const int MonitorSectionIndex = 1;
-        private const int AlarmSectionIndex = 2;
-        private const int InspectionSectionIndex = 3;
-        private const int AnalyticsSectionIndex = 4;
+        private const int DeviceManagementSectionIndex = 1;
+        private const int MonitorSectionIndex = 2;
+        private const int AlarmSectionIndex = 3;
+        private const int InspectionSectionIndex = 4;
         private const int DataInsightSectionIndex = 5;
-        private const int CommunicationDemoSectionIndex = 6;
+        private const int AnalyticsSectionIndex = 6;
+        private const int CommunicationDemoSectionIndex = 7;
         private const int WmEnterSizeMove = 0x0231;
         private const int WmSizing = 0x0214;
         private const int WmExitSizeMove = 0x0232;
@@ -47,6 +48,7 @@ namespace WinFormsApp.Views
         private readonly InspectionAnalyticsControl _analyticsPage;
         private readonly DataInsightPageControl _dataInsightPage;
         private readonly CommunicationDemoPageControl _communicationDemoPage;
+        private readonly DeviceManagementPageControl _deviceManagementPage;
         private readonly string _account;
         private readonly ContextMenuStrip _accountMenu;
 
@@ -90,13 +92,13 @@ namespace WinFormsApp.Views
         private enum SidebarGlyph
         {
             Home,
-            Devices,
+            Ledger,
+            MonitorCamera,
             Warning,
             Page,
-            Chart,
             Import,
-            Notification,
-            Setting,
+            Chart,
+            Network,
             User
         }
 
@@ -392,6 +394,7 @@ namespace WinFormsApp.Views
         public MainForm(
             DashboardController dashboardController,
             InspectionController inspectionController,
+            DeviceManagementController deviceManagementController,
             string account)
         {
             _dashboardController = dashboardController;
@@ -424,6 +427,10 @@ namespace WinFormsApp.Views
             _dataInsightPage.ViewImportedRequested += OnDataInsightViewImportedRequested;
             _dataInsightPage.ViewPendingRequested += OnDataInsightViewPendingRequested;
             _communicationDemoPage = new CommunicationDemoPageControl
+            {
+                Visible = false
+            };
+            _deviceManagementPage = new DeviceManagementPageControl(deviceManagementController)
             {
                 Visible = false
             };
@@ -651,6 +658,16 @@ namespace WinFormsApp.Views
                 return _dataInsightPage;
             }
 
+            if (_communicationDemoPage.Visible)
+            {
+                return _communicationDemoPage;
+            }
+
+            if (_deviceManagementPage.Visible)
+            {
+                return _deviceManagementPage;
+            }
+
             return null;
         }
 
@@ -683,12 +700,14 @@ namespace WinFormsApp.Views
             _analyticsPage.Dock = DockStyle.Fill;
             _dataInsightPage.Dock = DockStyle.Fill;
             _communicationDemoPage.Dock = DockStyle.Fill;
+            _deviceManagementPage.Dock = DockStyle.Fill;
             mainArea.Controls.Add(_monitorPage);
             mainArea.Controls.Add(_alarmPage);
             mainArea.Controls.Add(_inspectionPage);
             mainArea.Controls.Add(_analyticsPage);
             mainArea.Controls.Add(_dataInsightPage);
             mainArea.Controls.Add(_communicationDemoPage);
+            mainArea.Controls.Add(_deviceManagementPage);
             mainArea.Controls.Add(homeView);
             _sectionSwitchMask = new BufferedPanel
             {
@@ -1026,6 +1045,7 @@ namespace WinFormsApp.Views
             _analyticsPage?.ApplyTheme();
             _dataInsightPage?.ApplyTheme();
             _communicationDemoPage?.ApplyTheme();
+            _deviceManagementPage?.ApplyTheme();
             InvalidateControlTree(this);
         }
 
@@ -1117,6 +1137,7 @@ namespace WinFormsApp.Views
             var showAnalytics = index == AnalyticsSectionIndex;
             var showDataInsight = index == DataInsightSectionIndex;
             var showCommunicationDemo = index == CommunicationDemoSectionIndex;
+            var showDeviceManagement = index == DeviceManagementSectionIndex;
             var previousResizeAware = GetVisibleInteractiveResizeAware();
 
             if (!showHome)
@@ -1158,6 +1179,11 @@ namespace WinFormsApp.Views
                 {
                     _analyticsPage.RefreshData();
                 }
+
+                if (showDeviceManagement)
+                {
+                    _deviceManagementPage.RefreshData();
+                }
             }
 
             if (_mainArea is null)
@@ -1188,6 +1214,7 @@ namespace WinFormsApp.Views
             _analyticsPage.Visible = false;
             _dataInsightPage.Visible = false;
             _communicationDemoPage.Visible = false;
+            _deviceManagementPage.Visible = false;
 
             Control? activeSection = showHome
                 ? _homeView
@@ -1203,7 +1230,9 @@ namespace WinFormsApp.Views
                                     ? _dataInsightPage
                                     : showCommunicationDemo
                                         ? _communicationDemoPage
-                                        : _homeView;
+                                        : showDeviceManagement
+                                            ? _deviceManagementPage
+                                            : _homeView;
 
             if (activeSection is not null)
             {
@@ -1612,26 +1641,15 @@ namespace WinFormsApp.Views
             SidebarGlyph[] glyphs =
             {
                 SidebarGlyph.Home,
-                SidebarGlyph.Devices,
+                SidebarGlyph.Ledger,
+                SidebarGlyph.MonitorCamera,
                 SidebarGlyph.Warning,
                 SidebarGlyph.Page,
-                SidebarGlyph.Chart
-            };
-            string[] tips = { "首页", "点检记录", "统计分析", "通知", "设置" };
-
-            tips = new[] { "首页", "设备监控", "报警中心", "巡检管理", "统计分析" };
-
-            glyphs = new[]
-            {
-                SidebarGlyph.Home,
-                SidebarGlyph.Devices,
-                SidebarGlyph.Warning,
-                SidebarGlyph.Page,
-                SidebarGlyph.Chart,
                 SidebarGlyph.Import,
-                SidebarGlyph.Notification
+                SidebarGlyph.Chart,
+                SidebarGlyph.Network
             };
-            tips = new[] { "首页", "设备监控", "报警中心", "巡检管理", "统计分析", "数据导入", "通信 Demo" };
+            string[] tips = { "首页", "设备台账", "设备监控", "报警中心", "巡检管理", "数据导入", "统计分析", "通信 Demo" };
 
             for (int i = 0; i < glyphs.Length; i++)
             {
@@ -2301,13 +2319,13 @@ namespace WinFormsApp.Views
                 glyph switch
                 {
                     SidebarGlyph.Home => "\uE80F",
-                    SidebarGlyph.Devices => "\uE772",
+                    SidebarGlyph.Ledger => "\uE8FD",
+                    SidebarGlyph.MonitorCamera => "\uE714",
                     SidebarGlyph.Warning => "\uE7BA",
                     SidebarGlyph.Page => "\uE7C3",
-                    SidebarGlyph.Chart => "\uE9D9",
                     SidebarGlyph.Import => "\uE8B5",
-                    SidebarGlyph.Notification => "\uE7E7",
-                    SidebarGlyph.Setting => "\uE713",
+                    SidebarGlyph.Chart => "\uE9D9",
+                    SidebarGlyph.Network => "\uE774",
                     SidebarGlyph.User => "\uE77B",
                     _ => string.Empty
                 },

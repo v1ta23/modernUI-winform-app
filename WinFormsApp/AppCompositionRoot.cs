@@ -12,6 +12,7 @@ internal sealed class AppCompositionRoot
 {
     private readonly IAuthenticationService _authenticationService;
     private readonly IInspectionRecordService _inspectionRecordService;
+    private readonly IManagedDeviceService _managedDeviceService;
 
     public AppCompositionRoot()
     {
@@ -31,8 +32,13 @@ internal sealed class AppCompositionRoot
             AppDomain.CurrentDomain.BaseDirectory,
             "data",
             "inspection-templates.json");
+        var managedDevicePath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            "data",
+            "managed-devices.json");
         var inspectionRecordRepository = new SqlInspectionRecordRepository(sqlOptions);
         var inspectionTemplateRepository = new SqlInspectionTemplateRepository(sqlOptions);
+        var managedDeviceRepository = new JsonManagedDeviceRepository(managedDevicePath);
 
         MigrateJsonRecordsIfNeeded(
             inspectionRecordRepository,
@@ -44,6 +50,9 @@ internal sealed class AppCompositionRoot
         _authenticationService = new AuthenticationService(userRepository, rememberMeRepository);
         _inspectionRecordService = new InspectionRecordService(
             inspectionRecordRepository,
+            inspectionTemplateRepository);
+        _managedDeviceService = new ManagedDeviceService(
+            managedDeviceRepository,
             inspectionTemplateRepository);
     }
 
@@ -63,9 +72,11 @@ internal sealed class AppCompositionRoot
         var inspectionController = new InspectionController(
             _inspectionRecordService,
             new InspectionExcelExporter());
+        var deviceManagementController = new DeviceManagementController(_managedDeviceService);
         return new MainForm(
             dashboardController,
             inspectionController,
+            deviceManagementController,
             account);
     }
 

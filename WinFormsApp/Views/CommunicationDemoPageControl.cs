@@ -3,12 +3,14 @@ using System.Drawing.Drawing2D;
 
 namespace WinFormsApp.Views;
 
-internal sealed class CommunicationDemoPageControl : UserControl
+internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveResizeAware
 {
     private readonly BindingList<DeviceStatusRow> _deviceRows = new();
     private readonly BindingList<PacketLogRow> _packetRows = new();
     private readonly System.Windows.Forms.Timer _simulationTimer;
     private readonly Random _random = new(17);
+    private readonly Control _layoutRoot;
+    private readonly InteractiveResizeFreezeController _interactiveResizeController;
     private readonly Label _infoLabel;
     private readonly Label _connectionValueLabel;
     private readonly Label _onlineValueLabel;
@@ -65,13 +67,36 @@ internal sealed class CommunicationDemoPageControl : UserControl
         _simulationTimer.Tick += (_, _) => SimulatePacket();
 
         SeedDemoData();
-        Controls.Add(BuildLayout(_connectButton, heartbeatButton, faultButton));
+        _layoutRoot = BuildLayout(_connectButton, heartbeatButton, faultButton);
+        Controls.Add(_layoutRoot);
+        _interactiveResizeController = new InteractiveResizeFreezeController(this, _layoutRoot, PageChrome.PageBackground);
+        _layoutRoot.BringToFront();
         RefreshStatus();
     }
 
     public void ApplyTheme()
     {
         BackColor = PageChrome.PageBackground;
+        PageChrome.ApplyGridTheme(_deviceGrid);
+        PageChrome.ApplyGridTheme(_packetGrid);
+        Invalidate(true);
+    }
+
+    public void BeginInteractiveResize()
+    {
+        _interactiveResizeController.Begin();
+    }
+
+    public void EndInteractiveResize()
+    {
+        if (!_interactiveResizeController.IsActive)
+        {
+            return;
+        }
+
+        _interactiveResizeController.End();
+        _layoutRoot.PerformLayout();
+        PerformLayout();
         Invalidate(true);
     }
 
@@ -215,7 +240,7 @@ internal sealed class CommunicationDemoPageControl : UserControl
 
     private static DataGridView CreateGrid()
     {
-        var grid = new DataGridView
+        var grid = new BufferedDataGridView
         {
             Dock = DockStyle.Fill,
             AllowUserToAddRows = false,
@@ -420,6 +445,14 @@ internal sealed class CommunicationDemoPageControl : UserControl
         public string Payload { get; }
 
         public string Result { get; }
+    }
+
+    private sealed class BufferedDataGridView : DataGridView
+    {
+        public BufferedDataGridView()
+        {
+            DoubleBuffered = true;
+        }
     }
 
     private sealed class TopologyCanvas : Control
