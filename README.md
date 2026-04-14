@@ -1,13 +1,35 @@
-# 简介
+# 设备点检记录系统
 
-## 设备点检记录系统
+> C# WinForms | .NET 8 | SQL Server | AntdUI 现代暗色界面
 
-> C# WinForms 桌面应用 | SQL Server | ADO.NET
-
-面向小型制造企业的设备点检管理工具，支持登录鉴权与实时系统资源监控。
-
-**技术栈：** .NET / C# · WinForms · SQLite · ADO.NET
+面向中小型制造企业的设备点检管理桌面应用，覆盖从巡检录入、报警处理到统计分析的完整业务流程。
 
 ## 效果图
 
-<img width="1685" height="1109" alt="0fbbd819-7239-43a8-ac1a-e3c73c5af6b3" src="https://github.com/user-attachments/assets/2862b128-a5b6-4294-8015-6f920280b39f" />
+
+
+## 功能模块
+
+| 模块 | 说明 |
+|------|------|
+| 用户登录 | 注册/登录、记住密码、权限验证 |
+| 巡检记录 | 增删改查、条件筛选、模板录入、Excel 导出 |
+| CSV 导入 | 批量导入、自动校验、空值检测、状态识别 |
+| 报警中心 | 异常汇总、闭环处理、处理说明记录 |
+| 设备监控 | 设备台账、通信配置、重点设备识别 |
+| 统计分析 | 趋势图、状态分布、合格率展示 |
+
+## 技术栈
+
+- **语言/框架：** `C# · .NET 8 WinForms`
+- **数据库：** `SQL Server`
+- **数据访问：** `ADO.NET`
+- **Excel 导出：** `ClosedXML`
+- **界面风格：** `暗色主题 · 卡片式布局 · 双缓冲绘制`
+
+## 项目结构
+
+`App.Core`　　　　# 业务模型与领域逻辑  
+`App.Infrastructure`　# 数据访问层  
+`WinFormsApp`　　# 界面层（Views / Controllers / ViewModels）
+
