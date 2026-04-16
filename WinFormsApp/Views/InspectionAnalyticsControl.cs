@@ -30,6 +30,7 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
     private readonly DataGridView _lineSummaryGrid;
     private readonly DataGridView _issueGrid;
     private readonly PageChrome.ReadOnlyTextBlock _summaryTextBlock;
+    private readonly Button _generateAiButton;
     private Label _trendSubtitleLabel = null!;
     private Label _statusSubtitleLabel = null!;
     private Label _lineSubtitleLabel = null!;
@@ -75,12 +76,18 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         _summaryTextBlock = PageChrome.CreateReadOnlyTextBlock();
         _summaryTextBlock.Font = new Font("Microsoft YaHei UI", 8.8F);
 
-        _summaryRiskHintRow = new SummaryHintRow("风险级别", DangerColor);
+        _summaryRiskHintRow = new SummaryHintRow("风险等级", DangerColor);
         _summaryLineHintRow = new SummaryHintRow("重点产线", WarningColor);
-        _summaryActionHintRow = new SummaryHintRow("下一步", AccentBlue);
+        _summaryActionHintRow = new SummaryHintRow("处理建议", AccentBlue);
 
         var refreshButton = PageChrome.CreateActionButton("刷新数据", AccentBlue, true);
         refreshButton.Click += (_, _) => RefreshData();
+
+        var aiSettingsButton = PageChrome.CreateActionButton("AI 设置", AccentBlue, false);
+        aiSettingsButton.Click += (_, _) => OpenAiSettings();
+
+        _generateAiButton = PageChrome.CreateActionButton("生成 AI 分析", SuccessColor, false);
+        _generateAiButton.Click += async (_, _) => await GenerateAiAnalysisAsync();
 
         _rootLayout = new TableLayoutPanel
         {
@@ -95,7 +102,7 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 30F));
         _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 28F));
 
-        _headerShell = BuildHeader(refreshButton);
+        _headerShell = BuildHeader(refreshButton, aiSettingsButton, _generateAiButton);
         PageChrome.BindControlHeightToRow(_rootLayout, 0, _headerShell);
 
         _rootLayout.Controls.Add(_headerShell, 0, 0);
@@ -149,17 +156,7 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         _lineRows = BuildLineRows(_currentDashboard.Records);
         _attentionRows = BuildAttentionRows(_currentDashboard.Records);
 
-        var pendingRows = _currentDashboard.Records
-            .Where(record => record.Status != InspectionStatus.Normal && !record.IsClosed)
-            .OrderByDescending(record => record.CheckedAtValue)
-            .ToList();
-        var affectedDeviceCount = _currentDashboard.Records
-            .Where(record => record.Status != InspectionStatus.Normal)
-            .Select(record => $"{record.LineName}|{record.DeviceName}")
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
-        var highRiskLine = _lineRows.FirstOrDefault(row => row.AbnormalCount > 0)
-            ?? _lineRows.FirstOrDefault(row => row.WarningCount > 0);
+        var analysis = _currentDashboard.RiskAnalysis;
 
         _generatedAtLabel.Text = $"更新时间：{_currentDashboard.GeneratedAt:yyyy-MM-dd HH:mm}";
         _trendSubtitleLabel.Text = BuildTrendSubtitle(_currentDashboard.TrendPoints);
@@ -171,29 +168,168 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
             ? "当前没有预警和异常记录。"
             : $"最近 {_attentionRows.Count} 条需关注记录。";
 
-        _summarySubtitleLabel.Text = BuildSummarySubtitle(pendingRows.Count, highRiskLine);
-        _summaryTextBlock.Text = BuildSummaryText(pendingRows.Count, affectedDeviceCount, highRiskLine);
-
-        _summaryRiskHintRow.ValueText = BuildRiskLevelText(pendingRows.Count, highRiskLine);
-        _summaryRiskHintRow.NoteText = pendingRows.Count == 0
-            ? "当前没有待闭环问题。"
-            : $"待闭环 {pendingRows.Count} 条，异常优先。";
-
-        _summaryLineHintRow.ValueText = highRiskLine?.LineName ?? "暂无重点产线";
-        _summaryLineHintRow.NoteText = highRiskLine is null
-            ? "关注整体趋势和最近关注项。"
-            : $"异常 {highRiskLine.AbnormalCount} 条 / 预警 {highRiskLine.WarningCount} 条。";
-
-        _summaryActionHintRow.ValueText = BuildActionTitle(pendingRows.Count, highRiskLine);
-        _summaryActionHintRow.NoteText = pendingRows.Count > 0
-            ? "请前往报警中心或巡检页处理。"
-            : "可复盘趋势和产线稳定性。";
+        ApplyRiskAnalysis(analysis);
 
         _lineSummaryGrid.DataSource = _lineRows.ToList();
         _issueGrid.DataSource = _attentionRows.ToList();
 
         _trendChartPanel.Invalidate();
         _statusChartPanel.Invalidate();
+    }
+
+    private async Task GenerateAiAnalysisAsync()
+    {
+        if (!_generateAiButton.Enabled)
+        {
+            return;
+        }
+
+        var originalText = _generateAiButton.Text;
+        var originalCursor = Cursor;
+        _generateAiButton.Enabled = false;
+        _generateAiButton.Text = "AI 分析中...";
+        Cursor = Cursors.WaitCursor;
+        UseWaitCursor = true;
+        ApplyRiskAnalysis(BuildAiLoadingAnalysis());
+        _generatedAtLabel.Text = $"AI 分析中：{DateTime.Now:HH:mm:ss}";
+        RefreshAiFeedback();
+
+        RiskAnalysisResult? completedAnalysis = null;
+        try
+        {
+            var analysis = await _inspectionController.GenerateAiAnalysisAsync(new InspectionFilterViewModel());
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            ApplyRiskAnalysis(analysis);
+            _generatedAtLabel.Text = $"AI 分析已更新：{DateTime.Now:yyyy-MM-dd HH:mm}";
+            RefreshAiFeedback();
+            completedAnalysis = analysis;
+        }
+        catch (TaskCanceledException)
+        {
+            ApplyRiskAnalysis(BuildAiErrorAnalysis("AI 分析超时，请稍后再试。"));
+            RefreshAiFeedback();
+            MessageBox.Show(this, "AI 分析超时，请稍后再试。", "AI 分析", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ApplyRiskAnalysis(BuildAiErrorAnalysis(ex.Message));
+            RefreshAiFeedback();
+            MessageBox.Show(this, ex.Message, "AI 分析", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (HttpRequestException ex)
+        {
+            var message = $"AI 分析请求失败：{ex.Message}";
+            ApplyRiskAnalysis(BuildAiErrorAnalysis(message));
+            RefreshAiFeedback();
+            MessageBox.Show(this, message, "AI 分析", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            if (!IsDisposed)
+            {
+                _generateAiButton.Text = originalText;
+                _generateAiButton.Enabled = true;
+                Cursor = originalCursor;
+                UseWaitCursor = false;
+                RefreshAiFeedback();
+            }
+        }
+
+        if (completedAnalysis is not null && !IsDisposed)
+        {
+            ShowAiAnalysisResult(completedAnalysis);
+        }
+    }
+
+    private void ShowAiAnalysisResult(RiskAnalysisResult analysis)
+    {
+        using var dialog = new AiAnalysisResultDialog(analysis);
+        dialog.ShowDialog(FindForm());
+    }
+
+    private void OpenAiSettings()
+    {
+        using var dialog = new AiSettingsDialog(_inspectionController.GetAiSettings());
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            _inspectionController.SaveAiSettings(dialog.Settings);
+            _generatedAtLabel.Text = $"AI 设置已保存：{DateTime.Now:yyyy-MM-dd HH:mm}";
+            RefreshAiFeedback();
+            MessageBox.Show(this, "AI 设置已保存，当前页面已生效。", "AI 接口设置", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UriFormatException or InvalidOperationException)
+        {
+            MessageBox.Show(this, $"AI 设置保存失败：{ex.Message}", "AI 接口设置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void ApplyRiskAnalysis(RiskAnalysisResult analysis)
+    {
+        _summarySubtitleLabel.Text = analysis.DecisionTitle;
+        _summaryTextBlock.Text = BuildSummaryText(analysis);
+
+        _summaryRiskHintRow.ValueText = analysis.RiskLevel;
+        _summaryRiskHintRow.NoteText = analysis.RiskLevelNote;
+
+        _summaryLineHintRow.ValueText = analysis.PrimaryLineName;
+        _summaryLineHintRow.NoteText = analysis.PrimaryLineNote;
+
+        _summaryActionHintRow.ValueText = analysis.ActionTitle;
+        _summaryActionHintRow.NoteText = analysis.ActionNote;
+    }
+
+    private void RefreshAiFeedback()
+    {
+        _headerShell.PerformLayout();
+        _headerShell.Refresh();
+        _summarySubtitleLabel.Refresh();
+        _summaryTextBlock.Refresh();
+        _summaryRiskHintRow.Refresh();
+        _summaryLineHintRow.Refresh();
+        _summaryActionHintRow.Refresh();
+        Update();
+    }
+
+    private static RiskAnalysisResult BuildAiLoadingAnalysis()
+    {
+        return new RiskAnalysisResult(
+            "AI 正在分析当前巡检数据，请稍等。",
+            "分析中",
+            "正在读取异常、预警和待闭环记录。",
+            "计算中",
+            "AI 完成后会更新重点产线。",
+            "等待结果",
+            "请保持页面打开。",
+            "正在整理巡检记录和产线风险。",
+            "等待 AI 生成处理优先级。",
+            "分析完成后会自动刷新这里。");
+    }
+
+    private static RiskAnalysisResult BuildAiErrorAnalysis(string message)
+    {
+        var reason = string.IsNullOrWhiteSpace(message)
+            ? "AI 服务暂时没有返回可用结果。"
+            : message;
+        return new RiskAnalysisResult(
+            "AI 分析未完成，请检查网络或密钥配置。",
+            "未更新",
+            "当前仍可参考本地风险判断。",
+            "未更新",
+            "重点产线暂未更新。",
+            "稍后重试",
+            "接口恢复后再次点击生成。",
+            reason,
+            "先按本地风险结论处理待闭环问题。",
+            "确认网络、密钥和模型配置后重试。");
     }
 
     private void QueueVisibleLayoutPass()
@@ -218,12 +354,14 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         }));
     }
 
-    private Control BuildHeader(Button refreshButton)
+    private Control BuildHeader(Button refreshButton, Button aiSettingsButton, Button generateAiButton)
     {
         return PageChrome.CreatePageHeader(
-            "统计分析",
-            "汇总关键判断、趋势变化和最近关注项。",
+            "生产风险看板",
+            "汇总巡检趋势、异常分布和待处理风险。",
             _generatedAtLabel,
+            aiSettingsButton,
+            generateAiButton,
             refreshButton);
     }
 
@@ -243,14 +381,14 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         layout.Controls.Add(PageChrome.CreateSectionShell(
-            "趋势变化",
-            "最近 8 个时间桶的状态变化。",
+            "风险趋势",
+            "跟踪最近 8 个时间段的巡检状态变化。",
             out _trendSubtitleLabel,
             _trendChartPanel,
             new Padding(0, 0, 12, 0)), 0, 0);
         layout.Controls.Add(PageChrome.CreateSectionShell(
-            "状态占比",
-            "按当前筛选结果汇总。",
+            "异常分布",
+            "汇总正常、预警和异常占比。",
             out _statusSubtitleLabel,
             _statusChartPanel,
             Padding.Empty), 1, 0);
@@ -273,14 +411,14 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         layout.Controls.Add(PageChrome.CreateSectionShell(
-            "产线汇总",
-            "按风险优先级排序。",
+            "产线风险",
+            "按异常和预警优先级排序。",
             out _lineSubtitleLabel,
             _lineSummaryGrid,
             new Padding(0, 0, 12, 0)), 0, 0);
         layout.Controls.Add(PageChrome.CreateSectionShell(
-            "最近关注项",
-            "展示最近需要关注的记录。",
+            "待关注记录",
+            "展示最近需要复核的巡检记录。",
             out _issueSubtitleLabel,
             _issueGrid,
             Padding.Empty), 1, 0);
@@ -310,9 +448,9 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         summaryLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36F));
         summaryLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        var titleLabel = PageChrome.CreateTextLabel("智能摘要", 11F, FontStyle.Bold, TextPrimaryColor, new Padding(0, 0, 0, 6));
+        var titleLabel = PageChrome.CreateTextLabel("风险结论", 11F, FontStyle.Bold, TextPrimaryColor, new Padding(0, 0, 0, 6));
         _summarySubtitleLabel = PageChrome.CreateTextLabel(
-            "汇总当前风险结论和处理方向。",
+            "形成当前风险判断和处理优先级。",
             8.8F,
             FontStyle.Regular,
             TextMutedColor,
@@ -900,81 +1038,14 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         return $"从 {points.First().Label} 到 {points.Last().Label} 的状态变化。";
     }
 
-    private string BuildDecisionTitle(int pendingCount, LineSummaryRow? highRiskLine)
+    private static string BuildSummaryText(RiskAnalysisResult analysis)
     {
-        if (_currentDashboard.AbnormalCount > 0)
-        {
-            return $"结论：{highRiskLine?.LineName ?? "当前产线"} 风险偏高，异常优先处理。";
-        }
-
-        if (pendingCount > 0)
-        {
-            return "结论：当前有待闭环问题，请优先闭环。";
-        }
-
-        if (_currentDashboard.WarningCount > 0)
-        {
-            return "结论：当前以预警为主，请复核重点设备。";
-        }
-
-        return "结论：当前巡检状态平稳，按节奏复盘。";
-    }
-
-    private string BuildSummarySubtitle(int pendingCount, LineSummaryRow? highRiskLine)
-    {
-        return BuildDecisionTitle(pendingCount, highRiskLine);
-    }
-
-    private string BuildSummaryText(int pendingCount, int affectedDeviceCount, LineSummaryRow? highRiskLine)
-    {
-        var overview = $"本次共 {_currentDashboard.TotalCount} 条记录，合格率 {_currentDashboard.PassRateText}。正常 {_currentDashboard.NormalCount} / 预警 {_currentDashboard.WarningCount} / 异常 {_currentDashboard.AbnormalCount}。";
-        var focus = _lineRows.Count == 0
-            ? "暂无产线统计结果，请补充巡检数据。"
-            : highRiskLine is null
-                ? $"当前覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备，暂无单一产线风险明显突出。"
-                : $"当前覆盖 {_lineRows.Count} 条产线，涉及 {affectedDeviceCount} 台问题设备，优先关注 {highRiskLine.LineName}。";
-        var action = pendingCount > 0
-            ? $"当前还有 {pendingCount} 条待闭环问题，请优先处理异常，再确认预警。"
-            : _attentionRows.Count > 0
-                ? "当前没有待闭环问题，但最近仍有需要复核的记录，请查看最近关注项。"
-                : "当前没有待闭环问题，可继续观察趋势是否稳定。";
-
-        return string.Join(Environment.NewLine, [$"{overview} {focus}", action]);
-    }
-
-    private string BuildRiskLevelText(int pendingCount, LineSummaryRow? highRiskLine)
-    {
-        if (_currentDashboard.AbnormalCount > 0)
-        {
-            return highRiskLine is null ? "风险偏高" : $"{highRiskLine.LineName} 偏高";
-        }
-
-        if (pendingCount > 0)
-        {
-            return "需要关注";
-        }
-
-        if (_currentDashboard.WarningCount > 0)
-        {
-            return "轻度波动";
-        }
-
-        return "整体平稳";
-    }
-
-    private string BuildActionTitle(int pendingCount, LineSummaryRow? highRiskLine)
-    {
-        if (pendingCount > 0)
-        {
-            return highRiskLine is null ? "待闭环处理" : $"关注 {highRiskLine.LineName}";
-        }
-
-        if (_attentionRows.Count > 0)
-        {
-            return "复核记录";
-        }
-
-        return "趋势复盘";
+        return string.Join(Environment.NewLine, [
+            $"风险等级：{analysis.RiskLevel}",
+            $"主要原因：{analysis.RiskReason}",
+            $"优先处理：{analysis.PriorityAction}",
+            $"管理建议：{analysis.ManagementAdvice}"
+        ]);
     }
 
     private static IReadOnlyList<LineSummaryRow> BuildLineRows(IReadOnlyList<InspectionRecordViewModel> records)

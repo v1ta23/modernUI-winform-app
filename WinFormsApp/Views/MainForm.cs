@@ -1686,7 +1686,7 @@ namespace WinFormsApp.Views
                 SidebarGlyph.Chart,
                 SidebarGlyph.Network
             };
-            string[] tips = { "首页", "设备台账", "设备监控", "报警中心", "巡检管理", "数据导入", "统计分析", "通信测试" };
+            string[] tips = { "首页", "设备台账", "设备监控", "报警中心", "巡检管理", "数据导入", "风险看板", "通信测试" };
 
             for (int i = 0; i < glyphs.Length; i++)
             {

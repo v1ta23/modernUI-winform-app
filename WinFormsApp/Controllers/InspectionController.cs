@@ -9,13 +9,19 @@ namespace WinFormsApp.Controllers;
 internal sealed class InspectionController
 {
     private readonly IInspectionRecordService _inspectionRecordService;
+    private readonly IRiskAnalysisService _riskAnalysisService;
+    private readonly IAiRiskAnalysisService _aiRiskAnalysisService;
     private readonly InspectionExcelExporter _excelExporter;
 
     public InspectionController(
         IInspectionRecordService inspectionRecordService,
+        IRiskAnalysisService riskAnalysisService,
+        IAiRiskAnalysisService aiRiskAnalysisService,
         InspectionExcelExporter excelExporter)
     {
         _inspectionRecordService = inspectionRecordService;
+        _riskAnalysisService = riskAnalysisService;
+        _aiRiskAnalysisService = aiRiskAnalysisService;
         _excelExporter = excelExporter;
     }
 
@@ -72,8 +78,30 @@ internal sealed class InspectionController
             WarningCount = result.Summary.WarningCount,
             AbnormalCount = result.Summary.AbnormalCount,
             PassRateText = $"{result.Summary.PassRate:0.0}%",
-            GeneratedAt = result.GeneratedAt
+            GeneratedAt = result.GeneratedAt,
+            RiskAnalysis = _riskAnalysisService.Analyze(result)
         };
+    }
+
+    public async Task<RiskAnalysisResult> GenerateAiAnalysisAsync(
+        InspectionFilterViewModel filter,
+        CancellationToken cancellationToken = default)
+    {
+        var result = _inspectionRecordService.Query(ToQuery(filter));
+        var fallbackAnalysis = _riskAnalysisService.Analyze(result);
+        return await _aiRiskAnalysisService
+            .AnalyzeAsync(result, fallbackAnalysis, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public AiRiskAnalysisSettings GetAiSettings()
+    {
+        return _aiRiskAnalysisService.GetSettings();
+    }
+
+    public void SaveAiSettings(AiRiskAnalysisSettings settings)
+    {
+        _aiRiskAnalysisService.SaveSettings(settings);
     }
 
     public void Add(InspectionEntryViewModel entry)

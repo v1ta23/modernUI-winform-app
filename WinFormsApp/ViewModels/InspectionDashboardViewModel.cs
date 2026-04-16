@@ -23,6 +23,8 @@ internal sealed class InspectionDashboardViewModel
     public string PassRateText { get; init; } = "0%";
 
     public DateTime GeneratedAt { get; init; }
+
+    public RiskAnalysisResult RiskAnalysis { get; init; } = RiskAnalysisResult.Empty;
 }
 
 internal sealed class InspectionRecordViewModel

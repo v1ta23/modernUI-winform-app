@@ -3,6 +3,7 @@ using App.Core.Interfaces;
 using App.Core.Services;
 using App.Infrastructure.Config;
 using App.Infrastructure.Repositories;
+using App.Infrastructure.Services;
 using WinFormsApp.Controllers;
 using WinFormsApp.Exports;
 using WinFormsApp.Views;
@@ -17,6 +18,8 @@ internal sealed class AppCompositionRoot
     private readonly IAuthenticationService _authenticationService;
     private readonly IInspectionRecordService _inspectionRecordService;
     private readonly IManagedDeviceService _managedDeviceService;
+    private readonly IRiskAnalysisService _riskAnalysisService;
+    private readonly IAiRiskAnalysisService _aiRiskAnalysisService;
 
     public AppCompositionRoot()
     {
@@ -61,6 +64,8 @@ internal sealed class AppCompositionRoot
         _managedDeviceService = new ManagedDeviceService(
             managedDeviceRepository,
             inspectionTemplateRepository);
+        _riskAnalysisService = new LocalRiskAnalysisService();
+        _aiRiskAnalysisService = OpenAiCompatibleRiskAnalysisService.FromEnvironment();
     }
 
     public LoginForm CreateLoginForm()
@@ -78,6 +83,8 @@ internal sealed class AppCompositionRoot
         var dashboardController = new DashboardController(_inspectionRecordService, _managedDeviceService);
         var inspectionController = new InspectionController(
             _inspectionRecordService,
+            _riskAnalysisService,
+            _aiRiskAnalysisService,
             new InspectionExcelExporter());
         var deviceManagementController = new DeviceManagementController(_managedDeviceService);
         return new MainForm(
