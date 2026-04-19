@@ -35,7 +35,8 @@ namespace WinFormsApp.Views
         private const int InspectionSectionIndex = 4;
         private const int DataInsightSectionIndex = 5;
         private const int AnalyticsSectionIndex = 6;
-        private const int CommunicationDemoSectionIndex = 7;
+        private const int AiCollaborationSectionIndex = 7;
+        private const int CommunicationDemoSectionIndex = 8;
         private const int WmEnterSizeMove = 0x0231;
         private const int WmSizing = 0x0214;
         private const int WmExitSizeMove = 0x0232;
@@ -46,6 +47,7 @@ namespace WinFormsApp.Views
         private readonly AlarmCenterPageControl _alarmPage;
         private readonly InspectionPageControl _inspectionPage;
         private readonly InspectionAnalyticsControl _analyticsPage;
+        private readonly AiCollaborationControl _aiCollaborationPage;
         private readonly DataInsightPageControl _dataInsightPage;
         private readonly CommunicationDemoPageControl _communicationDemoPage;
         private readonly DeviceManagementPageControl _deviceManagementPage;
@@ -99,6 +101,7 @@ namespace WinFormsApp.Views
             Import,
             Chart,
             Network,
+            AiCollaboration,
             User
         }
 
@@ -419,6 +422,10 @@ namespace WinFormsApp.Views
             {
                 Visible = false
             };
+            _aiCollaborationPage = new AiCollaborationControl(inspectionController)
+            {
+                Visible = false
+            };
             _dataInsightPage = new DataInsightPageControl(inspectionController, deviceManagementController, account)
             {
                 Visible = false
@@ -654,6 +661,11 @@ namespace WinFormsApp.Views
                 return _analyticsPage;
             }
 
+            if (_aiCollaborationPage.Visible)
+            {
+                return _aiCollaborationPage;
+            }
+
             if (_dataInsightPage.Visible)
             {
                 return _dataInsightPage;
@@ -699,6 +711,7 @@ namespace WinFormsApp.Views
             _alarmPage.Dock = DockStyle.Fill;
             _inspectionPage.Dock = DockStyle.Fill;
             _analyticsPage.Dock = DockStyle.Fill;
+            _aiCollaborationPage.Dock = DockStyle.Fill;
             _dataInsightPage.Dock = DockStyle.Fill;
             _communicationDemoPage.Dock = DockStyle.Fill;
             _deviceManagementPage.Dock = DockStyle.Fill;
@@ -706,6 +719,7 @@ namespace WinFormsApp.Views
             mainArea.Controls.Add(_alarmPage);
             mainArea.Controls.Add(_inspectionPage);
             mainArea.Controls.Add(_analyticsPage);
+            mainArea.Controls.Add(_aiCollaborationPage);
             mainArea.Controls.Add(_dataInsightPage);
             mainArea.Controls.Add(_communicationDemoPage);
             mainArea.Controls.Add(_deviceManagementPage);
@@ -1044,6 +1058,7 @@ namespace WinFormsApp.Views
             _alarmPage?.ApplyTheme();
             _inspectionPage?.ApplyTheme();
             _analyticsPage?.ApplyTheme();
+            _aiCollaborationPage?.ApplyTheme();
             _dataInsightPage?.ApplyTheme();
             _communicationDemoPage?.ApplyTheme();
             _deviceManagementPage?.ApplyTheme();
@@ -1098,6 +1113,11 @@ namespace WinFormsApp.Views
             if (_analyticsPage.Visible)
             {
                 _analyticsPage.RefreshData();
+            }
+
+            if (_aiCollaborationPage.Visible)
+            {
+                _aiCollaborationPage.RefreshData();
             }
         }
 
@@ -1160,6 +1180,7 @@ namespace WinFormsApp.Views
             var showAlarm = index == AlarmSectionIndex;
             var showInspection = index == InspectionSectionIndex;
             var showAnalytics = index == AnalyticsSectionIndex;
+            var showAiCollaboration = index == AiCollaborationSectionIndex;
             var showDataInsight = index == DataInsightSectionIndex;
             var showCommunicationDemo = index == CommunicationDemoSectionIndex;
             var showDeviceManagement = index == DeviceManagementSectionIndex;
@@ -1205,6 +1226,11 @@ namespace WinFormsApp.Views
                     _analyticsPage.RefreshData();
                 }
 
+                if (showAiCollaboration)
+                {
+                    _aiCollaborationPage.RefreshData();
+                }
+
                 if (showDeviceManagement)
                 {
                     _deviceManagementPage.RefreshData();
@@ -1237,6 +1263,7 @@ namespace WinFormsApp.Views
             _alarmPage.Visible = false;
             _inspectionPage.Visible = false;
             _analyticsPage.Visible = false;
+            _aiCollaborationPage.Visible = false;
             _dataInsightPage.Visible = false;
             _communicationDemoPage.Visible = false;
             _deviceManagementPage.Visible = false;
@@ -1253,11 +1280,13 @@ namespace WinFormsApp.Views
                                 ? _analyticsPage
                                 : showDataInsight
                                     ? _dataInsightPage
-                                    : showCommunicationDemo
-                                        ? _communicationDemoPage
-                                        : showDeviceManagement
-                                            ? _deviceManagementPage
-                                            : _homeView;
+                                    : showAiCollaboration
+                                        ? _aiCollaborationPage
+                                        : showCommunicationDemo
+                                            ? _communicationDemoPage
+                                            : showDeviceManagement
+                                                ? _deviceManagementPage
+                                                : _homeView;
 
             if (activeSection is not null)
             {
@@ -1684,9 +1713,10 @@ namespace WinFormsApp.Views
                 SidebarGlyph.Page,
                 SidebarGlyph.Import,
                 SidebarGlyph.Chart,
+                SidebarGlyph.AiCollaboration,
                 SidebarGlyph.Network
             };
-            string[] tips = { "首页", "设备台账", "设备监控", "报警中心", "巡检管理", "数据导入", "风险看板", "通信测试" };
+            string[] tips = { "首页", "设备台账", "设备监控", "报警中心", "巡检管理", "数据导入", "风险看板", "AI 协同", "通信测试" };
 
             for (int i = 0; i < glyphs.Length; i++)
             {
@@ -2350,6 +2380,12 @@ namespace WinFormsApp.Views
             Color color,
             float size)
         {
+            if (glyph == SidebarGlyph.AiCollaboration)
+            {
+                DrawAiCollaborationGlyph(g, bounds, color);
+                return;
+            }
+
             using var font = new Font(SidebarIconFontFamily, size, FontStyle.Regular, GraphicsUnit.Pixel);
             TextRenderer.DrawText(
                 g,
@@ -2363,6 +2399,7 @@ namespace WinFormsApp.Views
                     SidebarGlyph.Import => "\uE8B5",
                     SidebarGlyph.Chart => "\uE9D9",
                     SidebarGlyph.Network => "\uE774",
+                    SidebarGlyph.AiCollaboration => string.Empty,
                     SidebarGlyph.User => "\uE77B",
                     _ => string.Empty
                 },
@@ -2372,6 +2409,48 @@ namespace WinFormsApp.Views
                 TextFormatFlags.HorizontalCenter |
                 TextFormatFlags.VerticalCenter |
                 TextFormatFlags.NoPadding);
+        }
+
+        private static void DrawAiCollaborationGlyph(Graphics g, Rectangle bounds, Color color)
+        {
+            var center = new PointF(bounds.Left + bounds.Width / 2F, bounds.Top + bounds.Height / 2F);
+            var radius = Math.Max(3.8F, bounds.Width * 0.09F);
+            var top = new PointF(center.X, bounds.Top + bounds.Height * 0.27F);
+            var left = new PointF(bounds.Left + bounds.Width * 0.31F, bounds.Top + bounds.Height * 0.62F);
+            var right = new PointF(bounds.Left + bounds.Width * 0.69F, bounds.Top + bounds.Height * 0.62F);
+
+            using var linePen = new Pen(Color.FromArgb(150, color), Math.Max(1.6F, bounds.Width * 0.045F))
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round
+            };
+            g.DrawLine(linePen, top, left);
+            g.DrawLine(linePen, top, right);
+            g.DrawLine(linePen, left, right);
+
+            using var nodeBrush = new SolidBrush(color);
+            FillNode(g, nodeBrush, top, radius);
+            FillNode(g, nodeBrush, left, radius);
+            FillNode(g, nodeBrush, right, radius);
+
+            using var corePen = new Pen(color, Math.Max(1.4F, bounds.Width * 0.04F))
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round
+            };
+            var sparkleSize = bounds.Width * 0.1F;
+            g.DrawLine(corePen, center.X, center.Y - sparkleSize, center.X, center.Y + sparkleSize);
+            g.DrawLine(corePen, center.X - sparkleSize, center.Y, center.X + sparkleSize, center.Y);
+        }
+
+        private static void FillNode(Graphics g, Brush brush, PointF center, float radius)
+        {
+            g.FillEllipse(
+                brush,
+                center.X - radius,
+                center.Y - radius,
+                radius * 2F,
+                radius * 2F);
         }
 
         private static uint ToAbgr(Color color)

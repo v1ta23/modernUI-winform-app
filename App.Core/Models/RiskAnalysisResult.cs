@@ -10,7 +10,12 @@ public sealed record RiskAnalysisResult(
     string ActionNote,
     string RiskReason,
     string PriorityAction,
-    string ManagementAdvice)
+    string ManagementAdvice,
+    string SuspectedCause = "",
+    string SuggestedOwner = "",
+    string SuggestedDeadline = "",
+    string ProductionImpact = "",
+    string StopInspectionAdvice = "")
 {
     public static RiskAnalysisResult Empty { get; } = new(
         "结论：暂无巡检数据，建议先补充数据。",
@@ -22,5 +27,10 @@ public sealed record RiskAnalysisResult(
         "先建立有效巡检记录。",
         "暂无巡检记录，建议先补充数据。",
         "先补充巡检数据。",
-        "建立巡检记录后再进行风险判断。");
+        "建立巡检记录后再进行风险判断。",
+        "暂无异常样本。",
+        "暂无责任部门。",
+        "暂无处理时限。",
+        "暂无生产影响。",
+        "暂无停机复检建议。");
 }

@@ -1,0 +1,38 @@
+[
+  {
+    "label": "PING 测试连接",
+    "commandText": "PING",
+    "purpose": "确认设备能不能正常回应。",
+    "expectedReply": "ECHO、PONG 或 OK。",
+    "successKeywords": [ "ECHO:", "PONG", "OK" ],
+    "successExplanation": "通信正常：设备已经回应连接测试。",
+    "errorAdvice": "PING 没有得到确认，先检查设备是否在线，或设备是否支持这条指令。"
+  },
+  {
+    "label": "READ_STATUS 读取状态",
+    "commandText": "READ_STATUS",
+    "purpose": "读取设备当前运行状态。",
+    "expectedReply": "STATUS 或 OK。",
+    "successKeywords": [ "STATUS", "OK" ],
+    "successExplanation": "状态读取成功：设备返回了当前运行状态。",
+    "errorAdvice": "状态读取失败，可能是指令不支持，或设备当前不允许查询。"
+  },
+  {
+    "label": "READ_ALARM 读取报警",
+    "commandText": "READ_ALARM",
+    "purpose": "查看设备当前是否有报警。",
+    "expectedReply": "ALARM、NO_ALARM 或 OK。",
+    "successKeywords": [ "ALARM", "NO_ALARM", "OK" ],
+    "successExplanation": "报警查询成功：设备返回了报警状态。",
+    "errorAdvice": "报警查询失败，建议检查设备协议里的报警读取指令。"
+  },
+  {
+    "label": "RESET_FAULT 清除故障",
+    "commandText": "RESET_FAULT",
+    "purpose": "请求设备清除可恢复故障。",
+    "expectedReply": "OK 或 RESET_OK。",
+    "successKeywords": [ "RESET_OK", "OK" ],
+    "successExplanation": "清除请求已被设备接受。",
+    "errorAdvice": "设备拒绝清除故障，可能是故障不可恢复，或需要现场复位。"
+  }
+]

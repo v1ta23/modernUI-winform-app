@@ -39,7 +39,12 @@ public sealed class LocalRiskAnalysisService : IRiskAnalysisService
             BuildActionNote(pendingCount, inspectionResult.Summary),
             BuildRiskReason(inspectionResult.Summary, affectedDeviceCount, highRiskLine),
             BuildPriorityAction(inspectionResult.Summary, pendingCount, highRiskLine),
-            BuildManagementAdvice(inspectionResult.Summary, pendingCount, highRiskLine));
+            BuildManagementAdvice(inspectionResult.Summary, pendingCount, highRiskLine),
+            BuildSuspectedCause(inspectionResult.Summary, highRiskLine),
+            BuildSuggestedOwner(inspectionResult.Summary),
+            BuildSuggestedDeadline(inspectionResult.Summary, pendingCount),
+            BuildProductionImpact(inspectionResult.Summary, highRiskLine),
+            BuildStopInspectionAdvice(inspectionResult.Summary));
     }
 
     private static IReadOnlyList<LineRiskSummary> BuildLineSummaries(IReadOnlyList<InspectionRecord> records)
@@ -220,6 +225,85 @@ public sealed class LocalRiskAnalysisService : IRiskAnalysisService
         }
 
         return "保持当前巡检节奏，定期复盘产线稳定性。";
+    }
+
+    private static string BuildSuspectedCause(InspectionSummary summary, LineRiskSummary? highRiskLine)
+    {
+        if (summary.AbnormalCount > 0)
+        {
+            return highRiskLine is null
+                ? "设备状态异常集中，需结合现场点检复核原因。"
+                : $"{highRiskLine.LineName} 异常集中，优先排查设备状态、工艺波动和点检偏差。";
+        }
+
+        if (summary.WarningCount > 0)
+        {
+            return "存在预警波动，可能与设备状态、班次操作或环境变化有关。";
+        }
+
+        return "暂未发现明显异常诱因。";
+    }
+
+    private static string BuildSuggestedOwner(InspectionSummary summary)
+    {
+        if (summary.AbnormalCount > 0)
+        {
+            return "设备部牵头，生产班组和质量人员配合确认。";
+        }
+
+        if (summary.WarningCount > 0)
+        {
+            return "生产班组先复核，设备部跟进预警设备。";
+        }
+
+        return "当班班组按日常巡检节奏跟进。";
+    }
+
+    private static string BuildSuggestedDeadline(InspectionSummary summary, int pendingCount)
+    {
+        if (summary.AbnormalCount > 0)
+        {
+            return "本班次内完成异常确认，必要时立即升级。";
+        }
+
+        if (pendingCount > 0)
+        {
+            return "当日完成闭环确认，避免跨班次滞留。";
+        }
+
+        return "按日常巡检周期复盘即可。";
+    }
+
+    private static string BuildProductionImpact(InspectionSummary summary, LineRiskSummary? highRiskLine)
+    {
+        if (summary.AbnormalCount > 0)
+        {
+            return highRiskLine is null
+                ? "可能影响局部设备稳定性，需关注产线节拍。"
+                : $"{highRiskLine.LineName} 可能影响产线节拍，建议现场确认是否放大。";
+        }
+
+        if (summary.WarningCount > 0)
+        {
+            return "暂未形成明显生产影响，但需防止预警转异常。";
+        }
+
+        return "暂无明显生产影响。";
+    }
+
+    private static string BuildStopInspectionAdvice(InspectionSummary summary)
+    {
+        if (summary.AbnormalCount > 0)
+        {
+            return "异常未确认前不建议盲目放行，必要时安排停机复检。";
+        }
+
+        if (summary.WarningCount > 0)
+        {
+            return "暂不建议停机，先复检预警设备并观察趋势。";
+        }
+
+        return "无需停机复检，保持正常巡检。";
     }
 
     private sealed record LineRiskSummary(

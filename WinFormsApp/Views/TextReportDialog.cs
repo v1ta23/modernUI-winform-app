@@ -1,75 +1,71 @@
-using App.Core.Models;
-using WinFormsApp.Services;
-
 namespace WinFormsApp.Views;
 
-internal sealed class AiAnalysisResultDialog : Form
+internal sealed class TextReportDialog : Form
 {
     private readonly string _reportText;
 
-    public AiAnalysisResultDialog(RiskAnalysisResult analysis)
+    public TextReportDialog(string title, string subtitle, string reportText)
     {
-        _reportText = AiReportFormatter.BuildAnalysisReport(analysis);
-        Text = "AI 分析结果";
+        _reportText = reportText;
+
+        Text = title;
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(620, 480);
+        ClientSize = new Size(680, 500);
         BackColor = PageChrome.PageBackground;
         Font = new Font("Microsoft YaHei UI", 9F);
 
-        Controls.Add(BuildContent(analysis));
+        Controls.Add(BuildContent(title, subtitle));
     }
 
-    private Control BuildContent(RiskAnalysisResult analysis)
+    private Control BuildContent(string title, string subtitle)
     {
         var shell = PageChrome.CreateSurfacePanel(new Padding(22), 16);
         shell.Margin = Padding.Empty;
 
         var titleLabel = PageChrome.CreateTextLabel(
-            "AI 分析结果",
+            title,
             15F,
             FontStyle.Bold,
             PageChrome.TextPrimary,
             new Padding(0, 0, 0, 6));
-        var decisionLabel = PageChrome.CreateTextLabel(
-            analysis.DecisionTitle,
+        var subtitleLabel = PageChrome.CreateTextLabel(
+            subtitle,
             9.5F,
             FontStyle.Regular,
             PageChrome.TextMuted,
             new Padding(0, 0, 0, 14));
 
-        var resultBox = new TextBox
+        var reportBox = new TextBox
         {
             BackColor = PageChrome.InputBackground,
             BorderStyle = BorderStyle.FixedSingle,
             Dock = DockStyle.Fill,
             Font = new Font("Microsoft YaHei UI", 10F),
             ForeColor = PageChrome.TextPrimary,
-            Margin = Padding.Empty,
             Multiline = true,
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
             Text = _reportText
         };
 
-        var copyButton = PageChrome.CreateActionButton("复制报告", PageChrome.AccentGreen, false);
+        var copyButton = PageChrome.CreateActionButton("复制内容", PageChrome.AccentGreen, false);
         copyButton.Margin = new Padding(10, 0, 0, 0);
         copyButton.Click += (_, _) =>
         {
             Clipboard.SetText(_reportText);
-            MessageBox.Show(this, "报告已复制。", "AI 分析结果", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "内容已复制。", title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         };
 
-        var closeButton = PageChrome.CreateActionButton("知道了", PageChrome.AccentBlue, true);
+        var closeButton = PageChrome.CreateActionButton("关闭", PageChrome.AccentBlue, true);
         closeButton.Click += (_, _) =>
         {
             DialogResult = DialogResult.OK;
             Close();
         };
-
         AcceptButton = closeButton;
         CancelButton = closeButton;
 
@@ -102,12 +98,11 @@ internal sealed class AiAnalysisResultDialog : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.Controls.Add(titleLabel, 0, 0);
-        layout.Controls.Add(decisionLabel, 0, 1);
-        layout.Controls.Add(resultBox, 0, 2);
+        layout.Controls.Add(subtitleLabel, 0, 1);
+        layout.Controls.Add(reportBox, 0, 2);
         layout.Controls.Add(actions, 0, 3);
 
         shell.Controls.Add(layout);
         return shell;
     }
-
 }

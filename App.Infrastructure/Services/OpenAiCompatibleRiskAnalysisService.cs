@@ -82,6 +82,39 @@ public sealed class OpenAiCompatibleRiskAnalysisService : IAiRiskAnalysisService
         WriteEnvironment(ModelEnvironmentName, normalizedSettings.Model);
     }
 
+    public async Task TestConnectionAsync(
+        AiRiskAnalysisSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedSettings = NormalizeSettings(settings);
+        if (string.IsNullOrWhiteSpace(normalizedSettings.ApiKey))
+        {
+            throw new InvalidOperationException("API Key 不能为空。");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, BuildEndpoint(normalizedSettings.BaseUrl));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", normalizedSettings.ApiKey);
+        request.Content = JsonContent.Create(new
+        {
+            model = normalizedSettings.Model,
+            temperature = 0,
+            messages = new object[]
+            {
+                new { role = "system", content = "只返回 ok。" },
+                new { role = "user", content = "ping" }
+            }
+        });
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"AI 连接测试失败：HTTP {(int)response.StatusCode} {response.ReasonPhrase}。{TrimForMessage(responseBody)}");
+        }
+
+        _ = ExtractMessageContent(responseBody);
+    }
+
     private static string? ReadEnvironment(string name)
     {
         var processValue = Environment.GetEnvironmentVariable(name);
@@ -115,7 +148,7 @@ public sealed class OpenAiCompatibleRiskAnalysisService : IAiRiskAnalysisService
                 new
                 {
                     role = "system",
-                    content = "你是制造业设备巡检风险分析助手。只返回 JSON，不要 Markdown。字段为 decisionTitle、riskLevel、riskLevelNote、primaryLineName、primaryLineNote、actionTitle、actionNote、riskReason、priorityAction、managementAdvice。"
+                    content = "你是制造业设备巡检风险分析助手。只返回 JSON，不要 Markdown。字段为 decisionTitle、riskLevel、riskLevelNote、primaryLineName、primaryLineNote、actionTitle、actionNote、riskReason、priorityAction、managementAdvice、suspectedCause、suggestedOwner、suggestedDeadline、productionImpact、stopInspectionAdvice。"
                 },
                 new
                 {
@@ -144,7 +177,46 @@ public sealed class OpenAiCompatibleRiskAnalysisService : IAiRiskAnalysisService
             Use(payload.ActionNote, fallbackAnalysis.ActionNote),
             Use(payload.RiskReason, fallbackAnalysis.RiskReason),
             Use(payload.PriorityAction, fallbackAnalysis.PriorityAction),
-            Use(payload.ManagementAdvice, fallbackAnalysis.ManagementAdvice));
+            Use(payload.ManagementAdvice, fallbackAnalysis.ManagementAdvice),
+            Use(payload.SuspectedCause, fallbackAnalysis.SuspectedCause),
+            Use(payload.SuggestedOwner, fallbackAnalysis.SuggestedOwner),
+            Use(payload.SuggestedDeadline, fallbackAnalysis.SuggestedDeadline),
+            Use(payload.ProductionImpact, fallbackAnalysis.ProductionImpact),
+            Use(payload.StopInspectionAdvice, fallbackAnalysis.StopInspectionAdvice));
+    }
+
+    public async Task<string> GenerateTextAsync(
+        string systemPrompt,
+        string userPrompt,
+        CancellationToken cancellationToken = default)
+    {
+        var requestSettings = CreateRequestSettings();
+        if (string.IsNullOrWhiteSpace(requestSettings.ApiKey))
+        {
+            throw new InvalidOperationException("未配置 AI_API_KEY，无法生成 AI 内容。");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestSettings.Endpoint);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", requestSettings.ApiKey);
+        request.Content = JsonContent.Create(new
+        {
+            model = requestSettings.Model,
+            temperature = 0.2,
+            messages = new object[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = userPrompt }
+            }
+        });
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"AI 内容生成失败：HTTP {(int)response.StatusCode} {response.ReasonPhrase}。{TrimForMessage(responseBody)}");
+        }
+
+        return ExtractMessageContent(responseBody).Trim();
     }
 
     public void Dispose()
@@ -222,7 +294,7 @@ public sealed class OpenAiCompatibleRiskAnalysisService : IAiRiskAnalysisService
             RecentRecords = records
         };
 
-        return "请基于以下巡检数据生成简短、正式、可执行的风险分析。每个字段控制在 40 个汉字以内。\n" +
+        return "请基于以下巡检数据生成简短、正式、可执行的制造业现场风险分析。不要写空泛套话，重点说明谁处理、何时处理、是否影响生产、是否需要停机复检。每个字段控制在 40 个汉字以内。\n" +
                JsonSerializer.Serialize(context, new JsonSerializerOptions { WriteIndented = true });
     }
 
@@ -323,6 +395,16 @@ public sealed class OpenAiCompatibleRiskAnalysisService : IAiRiskAnalysisService
         public string? PriorityAction { get; init; }
 
         public string? ManagementAdvice { get; init; }
+
+        public string? SuspectedCause { get; init; }
+
+        public string? SuggestedOwner { get; init; }
+
+        public string? SuggestedDeadline { get; init; }
+
+        public string? ProductionImpact { get; init; }
+
+        public string? StopInspectionAdvice { get; init; }
     }
 
     private readonly record struct RequestSettings(string ApiKey, string Model, Uri Endpoint);

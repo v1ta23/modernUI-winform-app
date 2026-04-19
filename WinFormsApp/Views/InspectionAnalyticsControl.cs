@@ -1,5 +1,6 @@
 using App.Core.Models;
 using WinFormsApp.Controllers;
+using WinFormsApp.Services;
 using WinFormsApp.ViewModels;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -41,6 +42,9 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
     private readonly SummaryHintRow _summaryActionHintRow;
 
     private InspectionDashboardViewModel _currentDashboard = new();
+    private RiskAnalysisResult _currentAnalysis = RiskAnalysisResult.Empty;
+    private InspectionFilterViewModel _currentFilter = new();
+    private IReadOnlyList<string> _lineOptions = Array.Empty<string>();
     private IReadOnlyList<LineSummaryRow> _lineRows = Array.Empty<LineSummaryRow>();
     private IReadOnlyList<AttentionRow> _attentionRows = Array.Empty<AttentionRow>();
 
@@ -80,14 +84,15 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         _summaryLineHintRow = new SummaryHintRow("重点产线", WarningColor);
         _summaryActionHintRow = new SummaryHintRow("处理建议", AccentBlue);
 
-        var refreshButton = PageChrome.CreateActionButton("刷新数据", AccentBlue, true);
-        refreshButton.Click += (_, _) => RefreshData();
-
-        var aiSettingsButton = PageChrome.CreateActionButton("AI 设置", AccentBlue, false);
-        aiSettingsButton.Click += (_, _) => OpenAiSettings();
-
         _generateAiButton = PageChrome.CreateActionButton("生成 AI 分析", SuccessColor, false);
         _generateAiButton.Click += async (_, _) => await GenerateAiAnalysisAsync();
+
+        var moreButton = PageChrome.CreateActionButton("更多", AccentBlue, false);
+        moreButton.ContextMenuStrip = BuildMoreMenu();
+        moreButton.Click += (_, _) =>
+        {
+            moreButton.ContextMenuStrip?.Show(moreButton, new Point(0, moreButton.Height + 4));
+        };
 
         _rootLayout = new TableLayoutPanel
         {
@@ -102,7 +107,7 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 30F));
         _rootLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 28F));
 
-        _headerShell = BuildHeader(refreshButton, aiSettingsButton, _generateAiButton);
+        _headerShell = BuildHeader(_generateAiButton, moreButton);
         PageChrome.BindControlHeightToRow(_rootLayout, 0, _headerShell);
 
         _rootLayout.Controls.Add(_headerShell, 0, 0);
@@ -152,7 +157,8 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
 
     public void RefreshData()
     {
-        _currentDashboard = _inspectionController.Load(new InspectionFilterViewModel());
+        _currentDashboard = _inspectionController.Load(_currentFilter);
+        _lineOptions = _currentDashboard.LineOptions;
         _lineRows = BuildLineRows(_currentDashboard.Records);
         _attentionRows = BuildAttentionRows(_currentDashboard.Records);
 
@@ -197,7 +203,7 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         RiskAnalysisResult? completedAnalysis = null;
         try
         {
-            var analysis = await _inspectionController.GenerateAiAnalysisAsync(new InspectionFilterViewModel());
+            var analysis = await _inspectionController.GenerateAiAnalysisAsync(_currentFilter);
             if (IsDisposed)
             {
                 return;
@@ -206,6 +212,9 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
             ApplyRiskAnalysis(analysis);
             _generatedAtLabel.Text = $"AI 分析已更新：{DateTime.Now:yyyy-MM-dd HH:mm}";
             RefreshAiFeedback();
+            _inspectionController.SaveAiAnalysisHistory(
+                analysis,
+                AiReportFormatter.BuildAnalysisReport(analysis));
             completedAnalysis = analysis;
         }
         catch (TaskCanceledException)
@@ -253,7 +262,9 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
 
     private void OpenAiSettings()
     {
-        using var dialog = new AiSettingsDialog(_inspectionController.GetAiSettings());
+        using var dialog = new AiSettingsDialog(
+            _inspectionController.GetAiSettings(),
+            _inspectionController.TestAiSettingsAsync);
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
         {
             return;
@@ -272,8 +283,40 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         }
     }
 
+    private void OpenAiHistory()
+    {
+        using var dialog = new AiAnalysisHistoryDialog(_inspectionController.GetAiAnalysisHistory());
+        dialog.ShowDialog(FindForm());
+    }
+
+    private void OpenFilterDialog()
+    {
+        using var dialog = new InspectionAnalyticsFilterDialog(_currentFilter, _lineOptions);
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
+        {
+            return;
+        }
+
+        _currentFilter = dialog.Filter;
+        RefreshData();
+    }
+
+    private void ShowDailyReport()
+    {
+        var reportText = AiReportFormatter.BuildDailyReport(
+            _currentDashboard,
+            _currentAnalysis,
+            _currentFilter);
+        using var dialog = new TextReportDialog(
+            "巡检日报",
+            "根据当前筛选结果和风险结论生成，可直接复制到日报或群通知。",
+            reportText);
+        dialog.ShowDialog(FindForm());
+    }
+
     private void ApplyRiskAnalysis(RiskAnalysisResult analysis)
     {
+        _currentAnalysis = analysis;
         _summarySubtitleLabel.Text = analysis.DecisionTitle;
         _summaryTextBlock.Text = BuildSummaryText(analysis);
 
@@ -354,15 +397,39 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         }));
     }
 
-    private Control BuildHeader(Button refreshButton, Button aiSettingsButton, Button generateAiButton)
+    private ContextMenuStrip BuildMoreMenu()
+    {
+        var menu = new ContextMenuStrip
+        {
+            BackColor = SurfaceBackground,
+            ForeColor = TextPrimaryColor,
+            Font = new Font("Microsoft YaHei UI", 9F),
+            ShowImageMargin = false
+        };
+        menu.Items.Add(CreateMenuItem("刷新数据", RefreshData));
+        menu.Items.Add(CreateMenuItem("筛选", OpenFilterDialog));
+        menu.Items.Add(CreateMenuItem("生成日报", ShowDailyReport));
+        menu.Items.Add(CreateMenuItem("分析历史", OpenAiHistory));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(CreateMenuItem("AI 设置", OpenAiSettings));
+        return menu;
+    }
+
+    private static ToolStripMenuItem CreateMenuItem(string text, Action action)
+    {
+        var item = new ToolStripMenuItem(text);
+        item.Click += (_, _) => action();
+        return item;
+    }
+
+    private Control BuildHeader(Button generateAiButton, Button moreButton)
     {
         return PageChrome.CreatePageHeader(
             "生产风险看板",
             "汇总巡检趋势、异常分布和待处理风险。",
             _generatedAtLabel,
-            aiSettingsButton,
             generateAiButton,
-            refreshButton);
+            moreButton);
     }
 
     private Control BuildPrimaryRow()
@@ -1044,6 +1111,9 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
             $"风险等级：{analysis.RiskLevel}",
             $"主要原因：{analysis.RiskReason}",
             $"优先处理：{analysis.PriorityAction}",
+            $"责任建议：{analysis.SuggestedOwner}",
+            $"处理时限：{analysis.SuggestedDeadline}",
+            $"停机复检：{analysis.StopInspectionAdvice}",
             $"管理建议：{analysis.ManagementAdvice}"
         ]);
     }

@@ -6,6 +6,7 @@ using App.Infrastructure.Repositories;
 using App.Infrastructure.Services;
 using WinFormsApp.Controllers;
 using WinFormsApp.Exports;
+using WinFormsApp.Services;
 using WinFormsApp.Views;
 
 namespace WinFormsApp;
@@ -20,6 +21,7 @@ internal sealed class AppCompositionRoot
     private readonly IManagedDeviceService _managedDeviceService;
     private readonly IRiskAnalysisService _riskAnalysisService;
     private readonly IAiRiskAnalysisService _aiRiskAnalysisService;
+    private readonly AiAnalysisHistoryStore _aiAnalysisHistoryStore;
 
     public AppCompositionRoot()
     {
@@ -43,6 +45,10 @@ internal sealed class AppCompositionRoot
             AppDomain.CurrentDomain.BaseDirectory,
             "data",
             "managed-devices.json");
+        var aiAnalysisHistoryPath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            "data",
+            "ai-analysis-history.json");
         var inspectionRecordRepository = new SqlInspectionRecordRepository(sqlOptions);
         var inspectionTemplateRepository = new SqlInspectionTemplateRepository(sqlOptions);
         var managedDeviceRepository = new SqlManagedDeviceRepository(sqlOptions);
@@ -66,6 +72,7 @@ internal sealed class AppCompositionRoot
             inspectionTemplateRepository);
         _riskAnalysisService = new LocalRiskAnalysisService();
         _aiRiskAnalysisService = OpenAiCompatibleRiskAnalysisService.FromEnvironment();
+        _aiAnalysisHistoryStore = new AiAnalysisHistoryStore(aiAnalysisHistoryPath);
     }
 
     public LoginForm CreateLoginForm()
@@ -85,6 +92,7 @@ internal sealed class AppCompositionRoot
             _inspectionRecordService,
             _riskAnalysisService,
             _aiRiskAnalysisService,
+            _aiAnalysisHistoryStore,
             new InspectionExcelExporter());
         var deviceManagementController = new DeviceManagementController(_managedDeviceService);
         return new MainForm(

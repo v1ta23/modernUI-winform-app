@@ -1,8 +1,10 @@
 using App.Core.Interfaces;
 using App.Core.Models;
+using WinFormsApp.Services;
 using WinFormsApp.Exports;
 using WinFormsApp.ViewModels;
 using System.IO;
+using System.Text.Json;
 
 namespace WinFormsApp.Controllers;
 
@@ -11,17 +13,20 @@ internal sealed class InspectionController
     private readonly IInspectionRecordService _inspectionRecordService;
     private readonly IRiskAnalysisService _riskAnalysisService;
     private readonly IAiRiskAnalysisService _aiRiskAnalysisService;
+    private readonly AiAnalysisHistoryStore _aiAnalysisHistoryStore;
     private readonly InspectionExcelExporter _excelExporter;
 
     public InspectionController(
         IInspectionRecordService inspectionRecordService,
         IRiskAnalysisService riskAnalysisService,
         IAiRiskAnalysisService aiRiskAnalysisService,
+        AiAnalysisHistoryStore aiAnalysisHistoryStore,
         InspectionExcelExporter excelExporter)
     {
         _inspectionRecordService = inspectionRecordService;
         _riskAnalysisService = riskAnalysisService;
         _aiRiskAnalysisService = aiRiskAnalysisService;
+        _aiAnalysisHistoryStore = aiAnalysisHistoryStore;
         _excelExporter = excelExporter;
     }
 
@@ -102,6 +107,51 @@ internal sealed class InspectionController
     public void SaveAiSettings(AiRiskAnalysisSettings settings)
     {
         _aiRiskAnalysisService.SaveSettings(settings);
+    }
+
+    public Task TestAiSettingsAsync(
+        AiRiskAnalysisSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        return _aiRiskAnalysisService.TestConnectionAsync(settings, cancellationToken);
+    }
+
+    public AiAnalysisHistoryEntry SaveAiAnalysisHistory(
+        RiskAnalysisResult analysis,
+        string reportText,
+        string title = "AI 风险分析",
+        string category = "AI 分析")
+    {
+        var settings = _aiRiskAnalysisService.GetSettings();
+        var entry = new AiAnalysisHistoryEntry(
+            Guid.NewGuid(),
+            DateTime.Now,
+            settings.Model,
+            settings.BaseUrl,
+            analysis,
+            reportText,
+            title,
+            category);
+        _aiAnalysisHistoryStore.Add(entry);
+        return entry;
+    }
+
+    public IReadOnlyList<AiAnalysisHistoryEntry> GetAiAnalysisHistory()
+    {
+        return _aiAnalysisHistoryStore.GetRecent();
+    }
+
+    public async Task<string> GenerateAiCollaborationAdviceAsync(
+        AiCollaborationRole role,
+        InspectionFilterViewModel filter,
+        CancellationToken cancellationToken = default)
+    {
+        var result = _inspectionRecordService.Query(ToQuery(filter));
+        var fallbackAnalysis = _riskAnalysisService.Analyze(result);
+        var prompt = BuildCollaborationPrompt(role, result, fallbackAnalysis);
+        return await _aiRiskAnalysisService
+            .GenerateTextAsync(BuildCollaborationSystemPrompt(role), prompt, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public void Add(InspectionEntryViewModel entry)
@@ -230,6 +280,101 @@ internal sealed class InspectionController
             entry.MeasuredValue,
             entry.CheckedAt,
             entry.Remark);
+    }
+
+    private static string BuildCollaborationSystemPrompt(AiCollaborationRole role)
+    {
+        var roleName = role switch
+        {
+            AiCollaborationRole.Equipment => "设备部 AI 协同助手",
+            AiCollaborationRole.Production => "生产部 AI 协同助手",
+            AiCollaborationRole.Quality => "质量部 AI 协同助手",
+            AiCollaborationRole.Management => "管理层 AI 协同助手",
+            _ => "制造业 AI 协同助手"
+        };
+
+        var focus = role switch
+        {
+            AiCollaborationRole.Equipment => "优先检修设备、疑似原因、是否停机复检、备件和维修排程。",
+            AiCollaborationRole.Production => "产线节拍影响、生产安排、现场协调、异常对排产的影响。",
+            AiCollaborationRole.Quality => "复检建议、质量风险、批次追踪、是否需要隔离或加严检查。",
+            AiCollaborationRole.Management => "总体风险、责任部门、处理优先级、跨部门协同事项。",
+            _ => "风险判断和处理建议。"
+        };
+
+        return $"你是{roleName}。请基于巡检数据给出正式、简短、可执行的部门建议，重点关注：{focus}不要写代码，不要解释你在分析什么，直接输出报告。";
+    }
+
+    private static string BuildCollaborationPrompt(
+        AiCollaborationRole role,
+        InspectionQueryResult result,
+        RiskAnalysisResult fallbackAnalysis)
+    {
+        var activeRecords = result.Records
+            .Where(record => !record.IsRevoked)
+            .ToList();
+        var pendingRecords = activeRecords
+            .Where(record => record.Status != InspectionStatus.Normal && !record.ClosedAt.HasValue)
+            .OrderByDescending(record => record.CheckedAt)
+            .Take(12)
+            .Select(record => new
+            {
+                record.CheckedAt,
+                record.LineName,
+                record.DeviceName,
+                Status = record.Status.ToDisplayText(),
+                record.Remark,
+                record.ClosureRemark
+            })
+            .ToList();
+        var lineRisks = activeRecords
+            .Where(record => record.Status != InspectionStatus.Normal)
+            .GroupBy(record => record.LineName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new
+            {
+                LineName = group.First().LineName,
+                WarningCount = group.Count(record => record.Status == InspectionStatus.Warning),
+                AbnormalCount = group.Count(record => record.Status == InspectionStatus.Abnormal)
+            })
+            .OrderByDescending(item => item.AbnormalCount)
+            .ThenByDescending(item => item.WarningCount)
+            .Take(8)
+            .ToList();
+        var deviceRisks = activeRecords
+            .Where(record => record.Status != InspectionStatus.Normal)
+            .GroupBy(record => new { record.LineName, record.DeviceName })
+            .Select(group => new
+            {
+                group.Key.LineName,
+                group.Key.DeviceName,
+                WarningCount = group.Count(record => record.Status == InspectionStatus.Warning),
+                AbnormalCount = group.Count(record => record.Status == InspectionStatus.Abnormal),
+                LatestRemark = group.OrderByDescending(record => record.CheckedAt).First().Remark
+            })
+            .OrderByDescending(item => item.AbnormalCount)
+            .ThenByDescending(item => item.WarningCount)
+            .Take(8)
+            .ToList();
+
+        var context = new
+        {
+            Role = role.ToString(),
+            Summary = new
+            {
+                result.Summary.TotalCount,
+                result.Summary.NormalCount,
+                result.Summary.WarningCount,
+                result.Summary.AbnormalCount,
+                result.Summary.PassRate
+            },
+            LocalRiskJudgement = fallbackAnalysis,
+            LineRisks = lineRisks,
+            DeviceRisks = deviceRisks,
+            PendingRecords = pendingRecords
+        };
+
+        return "请输出以下结构：一、部门判断；二、重点事项；三、建议动作；四、需要协同的部门。每段控制在 2 到 3 行，语言像正式生产现场建议。\n" +
+               JsonSerializer.Serialize(context, new JsonSerializerOptions { WriteIndented = true });
     }
 
     private static string BuildClosureStateText(InspectionRecord record)

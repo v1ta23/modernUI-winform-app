@@ -1,4 +1,5 @@
 using App.Core.Models;
+using System.Net.Http;
 
 namespace WinFormsApp.Views;
 
@@ -8,12 +9,17 @@ internal sealed class AiSettingsDialog : Form
     private readonly TextBox _baseUrlTextBox;
     private readonly TextBox _modelTextBox;
     private readonly CheckBox _showKeyCheckBox;
+    private readonly Func<AiRiskAnalysisSettings, CancellationToken, Task> _testConnectionAsync;
+    private readonly Button _testButton;
 
     public AiRiskAnalysisSettings Settings { get; private set; }
 
-    public AiSettingsDialog(AiRiskAnalysisSettings settings)
+    public AiSettingsDialog(
+        AiRiskAnalysisSettings settings,
+        Func<AiRiskAnalysisSettings, CancellationToken, Task> testConnectionAsync)
     {
         Settings = settings;
+        _testConnectionAsync = testConnectionAsync;
 
         Text = "AI 接口设置";
         StartPosition = FormStartPosition.CenterParent;
@@ -29,6 +35,8 @@ internal sealed class AiSettingsDialog : Form
         _apiKeyTextBox.UseSystemPasswordChar = true;
         _baseUrlTextBox = CreateInput(settings.BaseUrl, AiRiskAnalysisSettings.DefaultBaseUrl);
         _modelTextBox = CreateInput(settings.Model, AiRiskAnalysisSettings.DefaultModel);
+        _testButton = PageChrome.CreateActionButton("测试连接", PageChrome.AccentGreen, false);
+        _testButton.Click += async (_, _) => await TestConnectionAsync();
 
         _showKeyCheckBox = new CheckBox
         {
@@ -99,6 +107,7 @@ internal sealed class AiSettingsDialog : Form
     {
         var saveButton = PageChrome.CreateActionButton("保存设置", PageChrome.AccentBlue, true);
         var cancelButton = PageChrome.CreateActionButton("取消", PageChrome.SurfaceBorder, false);
+        _testButton.Margin = new Padding(10, 0, 0, 0);
         cancelButton.Margin = new Padding(10, 0, 0, 0);
 
         saveButton.Click += (_, _) => Confirm();
@@ -124,17 +133,60 @@ internal sealed class AiSettingsDialog : Form
         };
         actions.Controls.Add(saveButton);
         actions.Controls.Add(cancelButton);
+        actions.Controls.Add(_testButton);
         return actions;
     }
 
     private void Confirm()
     {
+        if (!TryBuildSettings(out var settings))
+        {
+            return;
+        }
+
+        Settings = settings;
+        DialogResult = DialogResult.OK;
+        Close();
+    }
+
+    private async Task TestConnectionAsync()
+    {
+        if (!TryBuildSettings(out var settings))
+        {
+            return;
+        }
+
+        var originalText = _testButton.Text;
+        _testButton.Enabled = false;
+        _testButton.Text = "测试中...";
+        UseWaitCursor = true;
+
+        try
+        {
+            await _testConnectionAsync(settings, CancellationToken.None);
+            MessageBox.Show(this, "连接正常，当前 Key 和模型可以使用。", "AI 接口设置", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            MessageBox.Show(this, $"连接失败：{ex.Message}", "AI 接口设置", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _testButton.Text = originalText;
+            _testButton.Enabled = true;
+            UseWaitCursor = false;
+        }
+    }
+
+    private bool TryBuildSettings(out AiRiskAnalysisSettings settings)
+    {
+        settings = AiRiskAnalysisSettings.Empty;
         var apiKey = _apiKeyTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             MessageBox.Show(this, "API Key 不能为空。", "AI 接口设置", MessageBoxButtons.OK, MessageBoxIcon.Information);
             _apiKeyTextBox.Focus();
-            return;
+            return false;
         }
 
         var baseUrl = string.IsNullOrWhiteSpace(_baseUrlTextBox.Text)
@@ -144,16 +196,15 @@ internal sealed class AiSettingsDialog : Form
         {
             MessageBox.Show(this, "接口地址格式不对，比如：https://codeapi.icu", "AI 接口设置", MessageBoxButtons.OK, MessageBoxIcon.Information);
             _baseUrlTextBox.Focus();
-            return;
+            return false;
         }
 
         var model = string.IsNullOrWhiteSpace(_modelTextBox.Text)
             ? AiRiskAnalysisSettings.DefaultModel
             : _modelTextBox.Text.Trim();
 
-        Settings = new AiRiskAnalysisSettings(apiKey, baseUrl, model);
-        DialogResult = DialogResult.OK;
-        Close();
+        settings = new AiRiskAnalysisSettings(apiKey, baseUrl, model);
+        return true;
     }
 
     private static Label CreateFieldLabel(string text)

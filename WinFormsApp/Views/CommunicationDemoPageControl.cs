@@ -1,23 +1,56 @@
 using System.ComponentModel;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 
 namespace WinFormsApp.Views;
 
 internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveResizeAware
 {
+    private const string CommandTemplateFileName = "communication-command-templates.json";
     private const string ConnectionHistoryFileName = "communication-devices.txt";
     private const int MaxRecentDevices = 8;
 
-    private static readonly TestCommand[] CommonCommands =
+    private static readonly CommunicationCommandTemplate[] DefaultCommandTemplates =
     [
-        new("PING 测试连接", "PING", "用途：确认设备能不能正常回应。"),
-        new("READ_STATUS 读取状态", "READ_STATUS", "用途：让设备返回当前运行状态。"),
-        new("READ_ALARM 读取报警", "READ_ALARM", "用途：查看设备现在有没有报警。"),
-        new("RESET_FAULT 清除故障", "RESET_FAULT", "用途：请求设备清除可恢复故障。")
+        new(
+            "PING 测试连接",
+            "PING",
+            "确认设备能不能正常回应。",
+            "ECHO、PONG 或 OK。",
+            ["ECHO:", "PONG", "OK"],
+            "通信正常：设备已经回应连接测试。",
+            "PING 没有得到确认，先检查设备是否在线，或设备是否支持这条指令。"),
+        new(
+            "READ_STATUS 读取状态",
+            "READ_STATUS",
+            "读取设备当前运行状态。",
+            "STATUS 或 OK。",
+            ["STATUS", "OK"],
+            "状态读取成功：设备返回了当前运行状态。",
+            "状态读取失败，可能是指令不支持，或设备当前不允许查询。"),
+        new(
+            "READ_ALARM 读取报警",
+            "READ_ALARM",
+            "查看设备当前是否有报警。",
+            "ALARM、NO_ALARM 或 OK。",
+            ["ALARM", "NO_ALARM", "OK"],
+            "报警查询成功：设备返回了报警状态。",
+            "报警查询失败，建议检查设备协议里的报警读取指令。"),
+        new(
+            "RESET_FAULT 清除故障",
+            "RESET_FAULT",
+            "请求设备清除可恢复故障。",
+            "OK 或 RESET_OK。",
+            ["RESET_OK", "OK"],
+            "清除请求已被设备接受。",
+            "设备拒绝清除故障，可能是故障不可恢复，或需要现场复位。")
     ];
+
+    private static readonly CommunicationCommandTemplate[] CommonCommands = LoadCommandTemplates();
 
     private readonly BindingList<DeviceStatusRow> _deviceRows = new();
     private readonly BindingList<PacketLogRow> _packetRows = new();
@@ -42,6 +75,8 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
     private readonly DataGridView _packetGrid;
     private TcpClient? _tcpClient;
     private NetworkStream? _tcpStream;
+    private LocalDemoDevice? _demoDevice;
+    private CommunicationCommandTemplate? _lastSentTemplate;
 
     private bool _connected;
     private int _pulse;
@@ -145,6 +180,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         if (disposing)
         {
             CloseTcpConnection();
+            StopDemoDevice();
         }
 
         base.Dispose(disposing);
@@ -478,13 +514,13 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
 
     private void ApplySelectedCommand()
     {
-        if (_commandComboBox.SelectedItem is not TestCommand command)
+        if (_commandComboBox.SelectedItem is not CommunicationCommandTemplate command)
         {
             return;
         }
 
         _sendTextBox.Text = command.CommandText;
-        SetDeviceReply(command.Hint);
+        SetDeviceReply($"用途：{command.Purpose}", $"预期回复：{command.ExpectedReply}");
     }
 
     private void SetDeviceReply(string message, string? explanation = null)
@@ -532,6 +568,39 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         catch (UnauthorizedAccessException)
         {
             return new List<string>();
+        }
+    }
+
+    private static CommunicationCommandTemplate[] LoadCommandTemplates()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, CommandTemplateFileName);
+        if (!File.Exists(path))
+        {
+            return DefaultCommandTemplates;
+        }
+
+        try
+        {
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var configs = JsonSerializer.Deserialize<List<CommunicationCommandTemplateConfig>>(File.ReadAllText(path), options);
+            var templates = configs?
+                .Select(config => config.ToTemplate())
+                .Where(template => template is not null)
+                .Cast<CommunicationCommandTemplate>()
+                .ToArray();
+            return templates is { Length: > 0 } ? templates : DefaultCommandTemplates;
+        }
+        catch (JsonException)
+        {
+            return DefaultCommandTemplates;
+        }
+        catch (IOException)
+        {
+            return DefaultCommandTemplates;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return DefaultCommandTemplates;
         }
     }
 
@@ -592,8 +661,19 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         return true;
     }
 
-    private static string ExplainResponse(string response)
+    private static CommunicationCommandTemplate? FindCommandTemplate(string commandText)
     {
+        return CommonCommands.FirstOrDefault(command =>
+            string.Equals(command.CommandText, commandText.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ExplainResponse(string response, CommunicationCommandTemplate? commandTemplate)
+    {
+        if (commandTemplate is not null)
+        {
+            return commandTemplate.Explain(response);
+        }
+
         var value = response.Trim();
         if (value.Length == 0)
         {
@@ -668,9 +748,35 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             return;
         }
 
-        _deviceHost = dialog.DeviceHost;
-        _devicePort = dialog.DevicePort;
+        if (dialog.UseDemoDevice)
+        {
+            StartDemoDevice();
+        }
+        else
+        {
+            StopDemoDevice();
+            _deviceHost = dialog.DeviceHost;
+            _devicePort = dialog.DevicePort;
+        }
+
         ConnectToDevice();
+    }
+
+    private void StartDemoDevice()
+    {
+        StopDemoDevice();
+        _demoDevice = LocalDemoDevice.Start();
+        _deviceHost = _demoDevice.Host;
+        _devicePort = _demoDevice.Port;
+        _sendTextBox.Text = "PING";
+        _lastSentTemplate = FindCommandTemplate("PING");
+        AddPacket("系统", "模拟设备", $"本机模拟设备已启动：{_deviceHost}:{_devicePort}", "提示");
+    }
+
+    private void StopDemoDevice()
+    {
+        _demoDevice?.Dispose();
+        _demoDevice = null;
     }
 
     private void ConnectToDevice()
@@ -691,11 +797,16 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             RememberCurrentDevice();
             UpdateDeviceRow("在线", "0 次", $"已连接 {_deviceHost}:{_devicePort}");
             AddPacket("系统", "控制端", $"已连接 {_deviceHost}:{_devicePort}。", "成功");
-            SetDeviceReply("连接成功。请输入发送内容，然后点击 2 发送测试。", "连接已经打通。下一步选一条常用指令，发送后再接收设备回复。");
+            SetDeviceReply(
+                "连接成功。请输入发送内容，然后点击 2 发送测试。",
+                _demoDevice is null
+                    ? "连接已经打通。下一步选一条常用指令，发送后再接收设备回复。"
+                    : "本机模拟设备已就绪。最简单演示：按 2 发送测试，再按 3 接收回复。");
         }
         catch (Exception ex)
         {
             CloseTcpConnection();
+            StopDemoDevice();
             _connected = false;
             _lastFlowText = "连接失败";
             UpdateDeviceRow("离线", "0 次", "连接失败");
@@ -718,7 +829,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             return;
         }
 
-        var text = _sendTextBox.Text;
+        var text = _sendTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(text))
         {
             AddPacket("发送", "控制端", "发送内容不能为空。", "未发送");
@@ -731,12 +842,17 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             var bytes = Encoding.UTF8.GetBytes(text + Environment.NewLine);
             _tcpStream.Write(bytes, 0, bytes.Length);
             _tcpStream.Flush();
+            _lastSentTemplate = FindCommandTemplate(text);
             _messageCount++;
             _lastDeviceIndex = 0;
             _lastFlowText = "发送";
             UpdateDeviceRow("在线", $"{_messageCount} 次", "已发送测试内容");
             AddPacket("发送", "待测设备", $"控制端发送：{Shorten(text)}", "已发送");
-            SetDeviceReply("内容已经发出。现在按 3 接收回复，看设备怎么回答。");
+            SetDeviceReply(
+                "内容已经发出。现在按 3 接收回复，看设备怎么回答。",
+                _lastSentTemplate is null
+                    ? "这是手动输入的内容，收到回复后按通用规则解释。"
+                    : $"使用模板：{_lastSentTemplate.Label}；预期回复：{_lastSentTemplate.ExpectedReply}");
         }
         catch (Exception ex)
         {
@@ -774,7 +890,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             _replyCount++;
             _lastDeviceIndex = 0;
             _lastFlowText = "接收";
-            SetDeviceReply($"原始回复：{response}", ExplainResponse(response));
+            SetDeviceReply($"原始回复：{response}", ExplainResponse(response, _lastSentTemplate));
             UpdateDeviceRow("在线", $"{Math.Max(_messageCount, _replyCount)} 次", "已收到真实回复");
             AddPacket("接收", "待测设备", $"真实回复：{Shorten(response)}", "已收到");
         }
@@ -856,6 +972,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
     private void DisconnectRealDevice(string message, bool addLog = true)
     {
         CloseTcpConnection();
+        StopDemoDevice();
         _connected = false;
         _connectButton.Text = "1 连接设备";
         _lastDeviceIndex = -1;
@@ -953,24 +1070,115 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         _topologyCanvas.Invalidate();
     }
 
-    private sealed class TestCommand
+    private sealed class CommunicationCommandTemplate
     {
-        public TestCommand(string label, string commandText, string hint)
+        public CommunicationCommandTemplate(
+            string label,
+            string commandText,
+            string purpose,
+            string expectedReply,
+            IReadOnlyList<string> successKeywords,
+            string successExplanation,
+            string errorAdvice)
         {
             Label = label;
             CommandText = commandText;
-            Hint = hint;
+            Purpose = purpose;
+            ExpectedReply = expectedReply;
+            SuccessKeywords = successKeywords;
+            SuccessExplanation = successExplanation;
+            ErrorAdvice = errorAdvice;
         }
 
         public string Label { get; }
 
         public string CommandText { get; }
 
-        public string Hint { get; }
+        public string Purpose { get; }
+
+        public string ExpectedReply { get; }
+
+        private IReadOnlyList<string> SuccessKeywords { get; }
+
+        private string SuccessExplanation { get; }
+
+        private string ErrorAdvice { get; }
+
+        public string Explain(string response)
+        {
+            var value = response.Trim();
+            if (value.Length == 0)
+            {
+                return $"设备返回了空内容。{Label} 的预期回复是：{ExpectedReply}";
+            }
+
+            if (value.StartsWith("ERR", StringComparison.OrdinalIgnoreCase)
+                || value.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("FAIL", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"设备返回错误：{ErrorAdvice}";
+            }
+
+            if (SuccessKeywords.Any(keyword => value.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+            {
+                return SuccessExplanation;
+            }
+
+            return $"已收到回复，但没有命中“{Label}”的预期结果。预期：{ExpectedReply}。请对照设备协议确认。";
+        }
 
         public override string ToString()
         {
             return Label;
+        }
+    }
+
+    private sealed class CommunicationCommandTemplateConfig
+    {
+        public string? Label { get; set; }
+
+        public string? CommandText { get; set; }
+
+        public string? Purpose { get; set; }
+
+        public string? ExpectedReply { get; set; }
+
+        public string[]? SuccessKeywords { get; set; }
+
+        public string? SuccessExplanation { get; set; }
+
+        public string? ErrorAdvice { get; set; }
+
+        public CommunicationCommandTemplate? ToTemplate()
+        {
+            if (string.IsNullOrWhiteSpace(Label)
+                || string.IsNullOrWhiteSpace(CommandText)
+                || string.IsNullOrWhiteSpace(Purpose)
+                || string.IsNullOrWhiteSpace(ExpectedReply)
+                || SuccessKeywords is not { Length: > 0 }
+                || string.IsNullOrWhiteSpace(SuccessExplanation)
+                || string.IsNullOrWhiteSpace(ErrorAdvice))
+            {
+                return null;
+            }
+
+            var successKeywords = SuccessKeywords
+                .Select(keyword => keyword.Trim())
+                .Where(keyword => keyword.Length > 0)
+                .ToArray();
+            if (successKeywords.Length == 0)
+            {
+                return null;
+            }
+
+            return new CommunicationCommandTemplate(
+                Label.Trim(),
+                CommandText.Trim(),
+                Purpose.Trim(),
+                ExpectedReply.Trim(),
+                successKeywords,
+                SuccessExplanation.Trim(),
+                ErrorAdvice.Trim());
         }
     }
 
@@ -1026,6 +1234,108 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         }
     }
 
+    private sealed class LocalDemoDevice : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly CancellationTokenSource _cancellation = new();
+
+        private LocalDemoDevice(TcpListener listener, int port)
+        {
+            _listener = listener;
+            Port = port;
+        }
+
+        public string Host => "127.0.0.1";
+
+        public int Port { get; }
+
+        public static LocalDemoDevice Start()
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            var device = new LocalDemoDevice(listener, port);
+            _ = Task.Run(device.AcceptClientsAsync);
+            return device;
+        }
+
+        public void Dispose()
+        {
+            _cancellation.Cancel();
+            _listener.Stop();
+            _cancellation.Dispose();
+        }
+
+        private async Task AcceptClientsAsync()
+        {
+            while (!_cancellation.IsCancellationRequested)
+            {
+                try
+                {
+                    var client = await _listener.AcceptTcpClientAsync();
+                    _ = Task.Run(() => HandleClientAsync(client));
+                }
+                catch (ObjectDisposedException)
+                {
+                    return;
+                }
+                catch (SocketException) when (_cancellation.IsCancellationRequested)
+                {
+                    return;
+                }
+            }
+        }
+
+        private async Task HandleClientAsync(TcpClient client)
+        {
+            using var activeClient = client;
+            using var stream = activeClient.GetStream();
+            var buffer = new byte[4096];
+
+            while (!_cancellation.IsCancellationRequested)
+            {
+                try
+                {
+                    var count = await stream.ReadAsync(buffer, 0, buffer.Length, _cancellation.Token);
+                    if (count <= 0)
+                    {
+                        return;
+                    }
+
+                    var request = Encoding.UTF8.GetString(buffer, 0, count).Trim();
+                    var reply = Encoding.UTF8.GetBytes(GetReply(request) + Environment.NewLine);
+                    await stream.WriteAsync(reply, 0, reply.Length, _cancellation.Token);
+                    await stream.FlushAsync(_cancellation.Token);
+                }
+                catch (IOException)
+                {
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return;
+                }
+            }
+        }
+
+        private static string GetReply(string request)
+        {
+            return request.Trim().ToUpperInvariant() switch
+            {
+                "PING" => "ECHO: PING",
+                "READ_STATUS" => "STATUS: RUNNING",
+                "READ_ALARM" => "NO_ALARM",
+                "RESET_FAULT" => "RESET_OK",
+                "" => "ERR: EMPTY_COMMAND",
+                _ => "ERR: UNKNOWN_COMMAND"
+            };
+        }
+    }
+
     private sealed class ConnectionDialog : Form
     {
         private readonly ComboBox _historyComboBox;
@@ -1058,6 +1368,14 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
                 _historyComboBox.SelectedIndex = 0;
             }
 
+            var demoButton = CreateDialogButton("一键演示", PageChrome.AccentBlue, true);
+            demoButton.Click += (_, _) =>
+            {
+                UseDemoDevice = true;
+                DialogResult = DialogResult.OK;
+                Close();
+            };
+
             var connectButton = CreateDialogButton("连接", PageChrome.AccentGreen, true);
             connectButton.Click += (_, _) => Confirm();
 
@@ -1081,6 +1399,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             };
             actions.Controls.Add(connectButton);
             actions.Controls.Add(cancelButton);
+            actions.Controls.Add(demoButton);
 
             var layout = new TableLayoutPanel
             {
@@ -1103,7 +1422,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             {
                 Dock = DockStyle.Fill,
                 ForeColor = PageChrome.TextMuted,
-                Text = "请输入 TCP 设备的地址和端口。",
+                Text = "有真实设备就填地址；没有设备点一键演示。",
                 TextAlign = ContentAlignment.MiddleLeft
             };
             layout.Controls.Add(tipLabel, 0, 0);
@@ -1123,6 +1442,8 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         public string DeviceHost { get; private set; } = string.Empty;
 
         public int DevicePort { get; private set; }
+
+        public bool UseDemoDevice { get; private set; }
 
         private void ApplyHistorySelection()
         {
