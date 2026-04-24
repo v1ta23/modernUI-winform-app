@@ -29,6 +29,19 @@ internal sealed class LoginForm : Form
     private const int WcaAccentPolicy = 19;
     private const int WmSizing = 0x0214;
     private const int WmExitSizeMove = 0x0232;
+    private const int FormClientWidth = 700;
+    private const int FormClientHeight = 680;
+    private const int FormMinimumWidth = 620;
+    private const int FormMinimumHeight = 660;
+    private const int ShellPaddingSize = 24;
+    private const int CardPaddingSize = 24;
+    private const int ContentColumnWidth = 336;
+    private const int FormCardWidth = ContentColumnWidth + (CardPaddingSize * 2);
+    private const int InputHostHeight = 48;
+    private const int ButtonRowHeight = 46;
+    private const int ButtonGap = 16;
+    private const int SecondaryButtonWidth = 144;
+    private const int PrimaryButtonWidth = ContentColumnWidth - SecondaryButtonWidth - ButtonGap;
 
     [DllImport("user32.dll")]
     private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
@@ -208,8 +221,8 @@ internal sealed class LoginForm : Form
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = true;
-        ClientSize = new Size(760, 700);
-        MinimumSize = new Size(680, 700);
+        ClientSize = new Size(FormClientWidth, FormClientHeight);
+        MinimumSize = new Size(FormMinimumWidth, FormMinimumHeight);
         Font = new Font("Microsoft YaHei UI", 9F);
         BackColor = WindowBackground;
         Padding = new Padding(24);
@@ -267,7 +280,7 @@ internal sealed class LoginForm : Form
             Dock = DockStyle.Fill,
             BackColor = Color.Transparent,
             Margin = new Padding(0),
-            Padding = new Padding(32)
+            Padding = new Padding(ShellPaddingSize)
         };
         shell.Controls.Add(BuildFormPanel());
         return shell;
@@ -289,8 +302,8 @@ internal sealed class LoginForm : Form
             CornerRadius = 24,
             FillColor = PanelFill,
             StrokeColor = PanelBorder,
-            Padding = new Padding(28),
-            Size = new Size(430, 438)
+            Padding = new Padding(CardPaddingSize),
+            Size = new Size(FormCardWidth, 420)
         };
         _formCard = card;
         outer.Controls.Add(card);
@@ -312,17 +325,17 @@ internal sealed class LoginForm : Form
 
         var top = 0;
         content.Controls.Add(CreateLabel("ACCESS", new Font("Segoe UI", 9.5F, FontStyle.Bold), AccentColor, ref top, 8));
-        content.Controls.Add(CreateLabel("\u6b22\u8fce\u767b\u5f55", new Font("Microsoft YaHei UI", 22F, FontStyle.Bold), TextPrimary, ref top, 10));
-        content.Controls.Add(CreateWrappedLabel("\u8bf7\u8f93\u5165\u8d26\u53f7\u4e0e\u5bc6\u7801\u3002", TextSecondary, 374, ref top, 22));
+        content.Controls.Add(CreateLabel("\u6b22\u8fce\u767b\u5f55", new Font("Microsoft YaHei UI", 20F, FontStyle.Bold), TextPrimary, ref top, 8));
+        content.Controls.Add(CreateWrappedLabel("\u8bf7\u8f93\u5165\u8d26\u53f7\u4e0e\u5bc6\u7801\u3002", TextSecondary, ContentColumnWidth, ref top, 20));
         content.Controls.Add(CreateFieldLabel("\u8d26\u53f7", ref top));
         content.Controls.Add(CreateInputHost(_accountTextBox, ref top));
         content.Controls.Add(CreateFieldLabel("\u5bc6\u7801", ref top));
         content.Controls.Add(CreateInputHost(_passwordTextBox, ref top));
         content.Controls.Add(CreateOptionsPanel(ref top));
         content.Controls.Add(CreateButtonsPanel(ref top));
-        content.Controls.Add(CreateWrappedLabel("\u9700\u8981\u65b0\u8d26\u53f7\u65f6\uff0c\u53ef\u4ee5\u76f4\u63a5\u70b9\u51fb\u6ce8\u518c\u3002", TextMuted, 374, ref top, 0));
+        content.Controls.Add(CreateWrappedLabel("\u9700\u8981\u65b0\u8d26\u53f7\u65f6\uff0c\u53ef\u4ee5\u76f4\u63a5\u70b9\u51fb\u6ce8\u518c\u3002", TextMuted, ContentColumnWidth, ref top, 0));
 
-        card.Size = new Size(card.Width, top + 56);
+        card.Size = new Size(card.Width, top + 52);
         CenterCard();
 
         return outer;
@@ -340,7 +353,7 @@ internal sealed class LoginForm : Form
         {
             BackColor = Color.Transparent,
             Location = new Point(0, top + 2),
-            Size = new Size(374, panelHeight)
+            Size = new Size(ContentColumnWidth, panelHeight)
         };
 
         _rememberCheckBox.Location = new Point(0, (panelHeight - rememberSize.Height) / 2);
@@ -350,7 +363,7 @@ internal sealed class LoginForm : Form
         _showPasswordCheckBox.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         panel.Controls.Add(_showPasswordCheckBox);
 
-        top += panelHeight + 22;
+        top += panelHeight + 18;
         return panel;
     }
 
@@ -360,11 +373,11 @@ internal sealed class LoginForm : Form
         {
             BackColor = Color.Transparent,
             Location = new Point(0, top),
-            Size = new Size(374, 48)
+            Size = new Size(ContentColumnWidth, ButtonRowHeight)
         };
 
         var registerButton = CreateSecondaryButton("\u6ce8\u518c");
-        registerButton.Bounds = new Rectangle(0, 0, 162, 48);
+        registerButton.Bounds = new Rectangle(0, 0, SecondaryButtonWidth, ButtonRowHeight);
         registerButton.Click += (_, _) =>
         {
             using var registerForm = _compositionRoot.CreateRegisterForm();
@@ -372,13 +385,13 @@ internal sealed class LoginForm : Form
         };
 
         var loginButton = CreatePrimaryButton("\u767b\u5f55");
-        loginButton.Bounds = new Rectangle(176, 0, 198, 48);
+        loginButton.Bounds = new Rectangle(SecondaryButtonWidth + ButtonGap, 0, PrimaryButtonWidth, ButtonRowHeight);
         loginButton.Click += OnLoginClicked;
         AcceptButton = loginButton;
 
         panel.Controls.Add(registerButton);
         panel.Controls.Add(loginButton);
-        top += 66;
+        top += ButtonRowHeight + 16;
         return panel;
     }
 
@@ -394,7 +407,7 @@ internal sealed class LoginForm : Form
             BackColor = InputBorder,
             Location = new Point(0, top),
             Padding = new Padding(1),
-            Size = new Size(374, 50)
+            Size = new Size(ContentColumnWidth, InputHostHeight)
         };
 
         var inner = new SurfacePanel
@@ -403,11 +416,11 @@ internal sealed class LoginForm : Form
             CornerRadius = 16,
             FillColor = InputFill,
             StrokeColor = InputFill,
-            Padding = new Padding(16, 13, 16, 13)
+            Padding = new Padding(14, 12, 14, 12)
         };
 
-        textBox.Location = new Point(16, 13);
-        textBox.Size = new Size(inner.Width - 32, 24);
+        textBox.Location = new Point(14, 12);
+        textBox.Size = new Size(inner.Width - 28, 24);
         textBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         inner.Controls.Add(textBox);
         border.Controls.Add(inner);
@@ -421,7 +434,7 @@ internal sealed class LoginForm : Form
         textBox.Leave += (_, _) => SetActive(false);
         inner.Enter += (_, _) => textBox.Focus();
 
-        top += 66;
+        top += 62;
         return border;
     }
 

@@ -525,7 +525,11 @@ public sealed class InspectionRecordService : IInspectionRecordService
         IReadOnlyList<InspectionRecord> records,
         InspectionQuery query)
     {
-        var end = query.EndTime?.AddMinutes(1) ?? DateTime.Now;
+        var hasExplicitTimeWindow = query.StartTime.HasValue || query.EndTime.HasValue;
+        var latestRecordEnd = records.Count == 0
+            ? DateTime.Now
+            : records.Max(record => record.CheckedAt).AddMinutes(1);
+        var end = query.EndTime?.AddMinutes(1) ?? (hasExplicitTimeWindow ? DateTime.Now : latestRecordEnd);
         var start = query.StartTime ?? end.AddHours(-7);
         var useDailyBuckets = (end - start).TotalDays > 2;
 

@@ -1307,15 +1307,12 @@ namespace WinFormsApp.Views
             if (activeSection is not null)
             {
                 InvalidateControlTree(activeSection);
-                activeSection.Update();
-                QueueSectionLayoutPass(activeSection, useSwitchMask, 2);
+                QueueSectionLayoutPass(activeSection, useSwitchMask, 1);
             }
             else if (useSwitchMask)
             {
                 HideSectionSwitchMask();
             }
-
-            _mainArea.Update();
         }
 
         private void FinishHomeIntroAnimation()
@@ -1345,7 +1342,6 @@ namespace WinFormsApp.Views
             _sectionSwitchMask.BackColor = MainAreaBackground;
             _sectionSwitchMask.Visible = true;
             _sectionSwitchMask.BringToFront();
-            _sectionSwitchMask.Update();
         }
 
         private void HideSectionSwitchMask()
@@ -1385,7 +1381,6 @@ namespace WinFormsApp.Views
                 }
 
                 _mainArea?.Invalidate(true);
-                _mainArea?.Update();
                 if (hideSwitchMask)
                 {
                     HideSectionSwitchMask();
@@ -1407,7 +1402,6 @@ namespace WinFormsApp.Views
 
             activeSection.PerformLayout();
             InvalidateControlTree(activeSection);
-            activeSection.Update();
             _mainArea?.PerformLayout();
             return true;
         }
