@@ -46,6 +46,15 @@ internal sealed class DeviceRowViewModel
     public string Remark { get; init; } = string.Empty;
 }
 
+internal sealed class DeviceCommunicationPresetViewModel
+{
+    public string LineName { get; init; } = string.Empty;
+
+    public string DeviceName { get; init; } = string.Empty;
+
+    public string CommunicationAddress { get; init; } = string.Empty;
+}
+
 internal sealed class DeviceEditorViewModel
 {
     public Guid? Id { get; init; }

@@ -21,6 +21,7 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
     private const int PrimaryRowHeight = 352;
     private const int DetailRowHeight = 432;
     private const int InsightTileRowHeight = 72;
+    private const int MinimumContentWidth = 1000;
     private static readonly Color AccentBlue = PageChrome.AccentBlue;
     private static readonly Color SuccessColor = PageChrome.AccentGreen;
     private static readonly Color WarningColor = PageChrome.AccentOrange;
@@ -495,7 +496,9 @@ internal sealed class InspectionAnalyticsControl : UserControl, IInteractiveResi
         _updatingScrollableLayout = true;
         try
         {
-            var viewportWidth = Math.Max(320, _scrollHost.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 2);
+            var viewportWidth = Math.Max(
+                MinimumContentWidth,
+                _scrollHost.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 2);
             if (_rootLayout.Width != viewportWidth)
             {
                 _rootLayout.Width = viewportWidth;

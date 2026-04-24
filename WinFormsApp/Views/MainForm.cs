@@ -442,6 +442,7 @@ namespace WinFormsApp.Views
                 Visible = false
             };
             _deviceManagementPage.DataChanged += OnDeviceDataChanged;
+            _deviceManagementPage.CommunicationTestRequested += OnDeviceCommunicationTestRequested;
 
             // 基础设置
             this.Text = string.Empty;
@@ -1145,6 +1146,13 @@ namespace WinFormsApp.Views
             }
         }
 
+        private void OnDeviceCommunicationTestRequested(DeviceCommunicationPresetViewModel device)
+        {
+            UpdateNavigationSelection(CommunicationDemoSectionIndex);
+            _communicationDemoPage.ApplyDevicePreset(device);
+            SwitchSection(CommunicationDemoSectionIndex);
+        }
+
         private void OnDataInsightViewImportedRequested(object? sender, EventArgs e)
         {
             OpenImportedBatchReview(false);
@@ -1380,11 +1388,13 @@ namespace WinFormsApp.Views
                     return;
                 }
 
-                _mainArea?.Invalidate(true);
                 if (hideSwitchMask)
                 {
                     HideSectionSwitchMask();
                 }
+
+                activeSection.Refresh();
+                _mainArea?.Invalidate(true);
             }));
         }
 

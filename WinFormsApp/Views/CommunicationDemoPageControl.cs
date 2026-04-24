@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using WinFormsApp.ViewModels;
 
 namespace WinFormsApp.Views;
 
@@ -87,6 +88,10 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
     private string _deviceHost = "127.0.0.1";
     private int _devicePort = 9001;
     private string _lastFlowText = "还没开始";
+    private string _selectedLineName = string.Empty;
+    private string _selectedDeviceName = "待测设备";
+    private string _selectedCommunicationAddress = string.Empty;
+    private bool _hasSelectedDeviceEndpoint;
 
     public CommunicationDemoPageControl()
     {
@@ -155,6 +160,46 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         PageChrome.ApplyGridTheme(_deviceGrid);
         PageChrome.ApplyGridTheme(_packetGrid);
         Invalidate(true);
+    }
+
+    public void ApplyDevicePreset(DeviceCommunicationPresetViewModel device)
+    {
+        _selectedLineName = device.LineName.Trim();
+        _selectedDeviceName = string.IsNullOrWhiteSpace(device.DeviceName) ? "待测设备" : device.DeviceName.Trim();
+        _selectedCommunicationAddress = device.CommunicationAddress.Trim();
+
+        if (_connected)
+        {
+            DisconnectRealDevice("已切换待测设备，原连接已断开。");
+        }
+
+        _messageCount = 0;
+        _replyCount = 0;
+        _lastDeviceIndex = 0;
+        _lastFlowText = "已带入";
+
+        if (TryParseCommunicationAddress(_selectedCommunicationAddress, out var host, out var port))
+        {
+            _deviceHost = host;
+            _devicePort = port;
+            _hasSelectedDeviceEndpoint = true;
+            UpdateDeviceRow("离线", "0 次", $"待连接 {_deviceHost}:{_devicePort}");
+            AddPacket("系统", GetCurrentDeviceDisplayName(), $"已从设备台账带入通信地址：{_selectedCommunicationAddress}", "待连接");
+            SetDeviceReply(
+                $"已带入：{GetCurrentDeviceDisplayName()}",
+                $"地址：{_selectedCommunicationAddress}。点击 1 连接设备时会自动填入该地址。");
+        }
+        else
+        {
+            _hasSelectedDeviceEndpoint = false;
+            UpdateDeviceRow("离线", "0 次", "通信地址格式不正确");
+            AddPacket("系统", GetCurrentDeviceDisplayName(), $"通信地址格式不正确：{_selectedCommunicationAddress}", "地址错误");
+            SetDeviceReply(
+                $"已带入：{GetCurrentDeviceDisplayName()}",
+                "通信地址格式应类似 tcp://192.168.10.21:9001 或 192.168.10.21:9001。");
+        }
+
+        RefreshStatus();
     }
 
     public void BeginInteractiveResize()
@@ -661,6 +706,21 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         return true;
     }
 
+    private static bool TryParseCommunicationAddress(string address, out string host, out int port)
+    {
+        var value = address.Trim();
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+            !string.IsNullOrWhiteSpace(uri.Host) &&
+            uri.Port > 0)
+        {
+            host = uri.Host;
+            port = uri.Port;
+            return true;
+        }
+
+        return TryParseEndpoint(value, out host, out port);
+    }
+
     private static CommunicationCommandTemplate? FindCommandTemplate(string commandText)
     {
         return CommonCommands.FirstOrDefault(command =>
@@ -847,7 +907,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             _lastDeviceIndex = 0;
             _lastFlowText = "发送";
             UpdateDeviceRow("在线", $"{_messageCount} 次", "已发送测试内容");
-            AddPacket("发送", "待测设备", $"控制端发送：{Shorten(text)}", "已发送");
+            AddPacket("发送", GetCurrentDeviceDisplayName(), $"控制端发送：{Shorten(text)}", "已发送");
             SetDeviceReply(
                 "内容已经发出。现在按 3 接收回复，看设备怎么回答。",
                 _lastSentTemplate is null
@@ -856,7 +916,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         }
         catch (Exception ex)
         {
-            AddPacket("故障", "待测设备", $"发送失败：{ex.Message}", "故障");
+            AddPacket("故障", GetCurrentDeviceDisplayName(), $"发送失败：{ex.Message}", "故障");
             SetDeviceReply($"发送失败：{ex.Message}", "发送时连接断了，通常是设备关闭、网络断开，或端口被重置。");
             DisconnectRealDevice("发送失败，连接已关闭。", addLog: false);
         }
@@ -892,18 +952,18 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             _lastFlowText = "接收";
             SetDeviceReply($"原始回复：{response}", ExplainResponse(response, _lastSentTemplate));
             UpdateDeviceRow("在线", $"{Math.Max(_messageCount, _replyCount)} 次", "已收到真实回复");
-            AddPacket("接收", "待测设备", $"真实回复：{Shorten(response)}", "已收到");
+            AddPacket("接收", GetCurrentDeviceDisplayName(), $"真实回复：{Shorten(response)}", "已收到");
         }
         catch (IOException)
         {
             _lastFlowText = "超时";
             SetDeviceReply("3 秒内没有收到设备回复。", "设备没有及时回答。可能没收到指令、正在忙，或这条指令不需要回复。");
-            AddPacket("接收", "待测设备", "3 秒内没有收到设备回复。", "超时");
+            AddPacket("接收", GetCurrentDeviceDisplayName(), "3 秒内没有收到设备回复。", "超时");
         }
         catch (Exception ex)
         {
             SetDeviceReply($"读取失败：{ex.Message}", "读取回复时连接异常，建议重新连接设备再测一次。");
-            AddPacket("故障", "待测设备", $"读取失败：{ex.Message}", "故障");
+            AddPacket("故障", GetCurrentDeviceDisplayName(), $"读取失败：{ex.Message}", "故障");
             DisconnectRealDevice("读取失败，连接已关闭。", addLog: false);
         }
         finally
@@ -945,6 +1005,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
 
         foreach (var device in _deviceRows)
         {
+            device.DeviceName = GetCurrentDeviceDisplayName();
             device.LinkState = _connected ? "在线" : "离线";
             device.Latency = "0 次";
             device.LastPacket = _connected ? DateTime.Now.ToString("HH:mm:ss") : "--";
@@ -963,6 +1024,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         }
 
         var device = _deviceRows[0];
+        device.DeviceName = GetCurrentDeviceDisplayName();
         device.LinkState = state;
         device.Latency = countText;
         device.LastPacket = state == "离线" ? "--" : DateTime.Now.ToString("HH:mm:ss");
@@ -1045,11 +1107,15 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
 
         _connectionValueLabel.Text = _connected ? "已连接" : "未连接";
         _connectionValueLabel.ForeColor = _connected ? PageChrome.AccentGreen : PageChrome.TextPrimary;
-        _connectionNoteLabel.Text = _connected ? $"已连接 {_deviceHost}:{_devicePort}" : "连接后才能发送测试消息";
+        _connectionNoteLabel.Text = _connected
+            ? $"已连接 {_deviceHost}:{_devicePort}"
+            : _hasSelectedDeviceEndpoint ? $"待连接 {_deviceHost}:{_devicePort}" : "连接后才能发送测试消息";
         _onlineValueLabel.Text = $"{onlineCount}/{_deviceRows.Count}";
         _onlineNoteLabel.Text = issueCount > 0
             ? $"{issueCount} 台设备处于故障状态"
-            : _connected ? $"当前设备 {_deviceHost}:{_devicePort}" : "当前没有设备在线";
+            : _connected
+                ? $"当前设备 {GetCurrentDeviceDisplayName()} {_deviceHost}:{_devicePort}"
+                : HasSelectedDevice() ? $"待测：{GetCurrentDeviceDisplayName()}" : "当前没有设备在线";
         _latencyValueLabel.Text = _lastFlowText;
         _latencyNoteLabel.Text = _connected
             ? $"已发送 {_messageCount} 条，已收到 {_replyCount} 条"
@@ -1060,7 +1126,9 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             : $"已记录 {_alarmCount} 次设备故障";
         _infoLabel.Text = _connected
             ? "请继续按 2 发送测试、按 3 接收回复；需要演示故障时按 4。"
-            : "请先按 1 连接设备。";
+            : _hasSelectedDeviceEndpoint
+                ? $"已带入 {GetCurrentDeviceDisplayName()}，请按 1 连接设备。"
+                : HasSelectedDevice() ? "已带入设备，但通信地址格式不正确。" : "请先按 1 连接设备。";
 
         _deviceRows.ResetBindings();
         _topologyCanvas.Connected = _connected;
@@ -1068,6 +1136,19 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
         _topologyCanvas.ActiveDeviceIndex = _lastDeviceIndex;
         _topologyCanvas.FlowText = _lastFlowText;
         _topologyCanvas.Invalidate();
+    }
+
+    private bool HasSelectedDevice()
+    {
+        return !string.IsNullOrWhiteSpace(_selectedCommunicationAddress) ||
+            !string.Equals(_selectedDeviceName, "待测设备", StringComparison.Ordinal);
+    }
+
+    private string GetCurrentDeviceDisplayName()
+    {
+        return string.IsNullOrWhiteSpace(_selectedLineName)
+            ? _selectedDeviceName
+            : $"{_selectedLineName} / {_selectedDeviceName}";
     }
 
     private sealed class CommunicationCommandTemplate
@@ -1193,7 +1274,7 @@ internal sealed class CommunicationDemoPageControl : UserControl, IInteractiveRe
             Detail = detail;
         }
 
-        public string DeviceName { get; }
+        public string DeviceName { get; set; }
 
         public string LinkState { get; set; }
 

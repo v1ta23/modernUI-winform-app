@@ -35,6 +35,8 @@ internal sealed class DeviceManagementPageControl : UserControl, IInteractiveRes
 
     public event EventHandler? DataChanged;
 
+    public event Action<DeviceCommunicationPresetViewModel>? CommunicationTestRequested;
+
     public DeviceManagementPageControl(DeviceManagementController controller)
     {
         _controller = controller;
@@ -68,11 +70,13 @@ internal sealed class DeviceManagementPageControl : UserControl, IInteractiveRes
         var refreshButton = PageChrome.CreateActionButton("刷新", PageChrome.AccentBlue, false);
         var newButton = PageChrome.CreateActionButton("新增设备", PageChrome.AccentGreen, true);
         var saveButton = PageChrome.CreateActionButton("保存设备", PageChrome.AccentBlue, true);
+        var communicationTestButton = PageChrome.CreateActionButton("通信测试", PageChrome.AccentCyan, false);
         var deleteButton = PageChrome.CreateActionButton("删除设备", PageChrome.AccentRed, false);
 
         refreshButton.Click += (_, _) => RefreshData();
         newButton.Click += (_, _) => StartNewDevice();
         saveButton.Click += (_, _) => SaveCurrentDevice();
+        communicationTestButton.Click += (_, _) => RequestCommunicationTest();
         deleteButton.Click += (_, _) => DeleteCurrentDevice();
         _remarkButton.Click += (_, _) => ShowRemarkDialog();
         _keywordTextBox.TextChanged += (_, _) => RefreshData();
@@ -112,6 +116,7 @@ internal sealed class DeviceManagementPageControl : UserControl, IInteractiveRes
             refreshButton,
             newButton,
             saveButton,
+            communicationTestButton,
             deleteButton);
         PageChrome.BindControlHeightToRow(root, 0, header);
 
@@ -636,6 +641,39 @@ internal sealed class DeviceManagementPageControl : UserControl, IInteractiveRes
         {
             MessageBox.Show(this, ex.Message, "删除失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    private void RequestCommunicationTest()
+    {
+        var preset = BuildCommunicationPreset();
+        if (preset is null)
+        {
+            MessageBox.Show(this, "请先在左侧选择设备。", "通信测试", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(preset.CommunicationAddress))
+        {
+            MessageBox.Show(this, "当前设备未填写通信地址，请先在右侧补充后再测试。", "通信测试", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        CommunicationTestRequested?.Invoke(preset);
+    }
+
+    private DeviceCommunicationPresetViewModel? BuildCommunicationPreset()
+    {
+        if (!_editingId.HasValue)
+        {
+            return null;
+        }
+
+        return new DeviceCommunicationPresetViewModel
+        {
+            LineName = _lineNameTextBox.Text.Trim(),
+            DeviceName = _deviceNameTextBox.Text.Trim(),
+            CommunicationAddress = _communicationAddressTextBox.Text.Trim()
+        };
     }
 
     private ManagedDeviceStatus GetEditorStatus()

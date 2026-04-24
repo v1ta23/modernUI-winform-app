@@ -207,7 +207,6 @@ internal sealed class LoginForm : Form
     private Bitmap? _resizeCardSnapshot;
     private bool _backgroundCacheDirty = true;
     private bool _isInteractiveResize;
-    private bool _windowEffectsSuspended;
     private MainForm? _currentDashboard;
     private DashboardCloseMode _dashboardCloseMode = DashboardCloseMode.ExitApplication;
 
@@ -261,7 +260,6 @@ internal sealed class LoginForm : Form
         if (m.Msg == WmSizing)
         {
             BeginInteractiveResize();
-            SuspendWindowEffects();
         }
 
         base.WndProc(ref m);
@@ -269,7 +267,6 @@ internal sealed class LoginForm : Form
         if (m.Msg == WmExitSizeMove)
         {
             EndInteractiveResize();
-            ResumeWindowEffects();
         }
     }
 
@@ -684,11 +681,6 @@ internal sealed class LoginForm : Form
         ApplyAccentPolicy(3, Color.FromArgb(196, 12, 16, 22));
     }
 
-    private void DisableAcrylicBlur()
-    {
-        ApplyAccentPolicy(0, Color.Transparent);
-    }
-
     private void ApplyAccentPolicy(int accentState, Color gradientColor)
     {
         var accent = new AccentPolicy
@@ -750,34 +742,6 @@ internal sealed class LoginForm : Form
         DisposeResizeSnapshot();
         _backgroundCacheDirty = true;
         Invalidate(true);
-    }
-
-    private void SuspendWindowEffects()
-    {
-        if (_windowEffectsSuspended)
-        {
-            return;
-        }
-
-        _windowEffectsSuspended = true;
-        if (IsHandleCreated)
-        {
-            DisableAcrylicBlur();
-        }
-    }
-
-    private void ResumeWindowEffects()
-    {
-        if (!_windowEffectsSuspended)
-        {
-            return;
-        }
-
-        _windowEffectsSuspended = false;
-        if (IsHandleCreated)
-        {
-            EnableAcrylicBlur();
-        }
     }
 
     private void OnFormSizeChanged()
