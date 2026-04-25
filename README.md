@@ -4,6 +4,13 @@
 
 面向制造业的设备点检桌面应用，覆盖设备台账、点检记录、报警闭环、CSV 数据导入、风险看板、TCP 设备通信与 AI 智能分析，将点检数据转化为风险结论。
 
+## 页面展示
+
+<img width="1372" height="1280" alt="Snipaste_2026-04-26_03-04-09" src="https://github.com/user-attachments/assets/b06bba97-47d5-44c9-958b-e48fdc5fb6df" />
+<img width="1581" height="1011" alt="Snipaste_2026-04-26_02-59-02" src="https://github.com/user-attachments/assets/10e2a31d-0338-4e97-887e-390cb1d3988a" />
+
+
+
 ## 功能模块
 
 | 模块    | 说明                       |
